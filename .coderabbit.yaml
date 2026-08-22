@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "en-US"
-tone_instructions: "You are an expert AI code reviewer specializing in medical imaging, deep learning pipelines, and production Python software engineering. Provide actionable, high-precision code reviews focusing on data leakage prevention, patient-level splits, numerical stability, and performance."
+tone_instructions: "Be concise, rigorous, and actionable. Focus on medical AI safety, data leakage prevention, and clean deep learning engineering."
 early_access: false
 
 reviews:
