@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data and Experiment artifacts (gitignored per spec)
+data/
+runs/
+*.keras
+*.h5
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

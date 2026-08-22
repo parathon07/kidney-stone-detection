@@ -1,0 +1,34 @@
+seed: 42
+
+data:
+  image_size: 384
+  channels: 1
+  use_supplied_derivatives: false
+  augmentation:
+    rotation_deg: 10
+    translation_fraction: 0.03
+    zoom_fraction: 0.05
+    contrast_fraction: 0.10
+
+model:
+  name: kidney_cnn_v1
+  filters: [64, 128, 256, 512]
+  convs_per_block: 2
+  kernel_size: 3
+  dense_units: 192
+  dropout: 0.35
+
+training:
+  batch_size: 16
+  epochs: 60
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  early_stopping_patience: 8
+  reduce_lr_patience: 3
+  reduce_lr_factor: 0.5
+  min_lr: 0.000001
+  mixed_precision: auto
+
+evaluation:
+  threshold_strategy: youden_j_oof
+  class_names: [Non-Stone, Stone]
