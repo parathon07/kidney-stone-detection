@@ -1,0 +1,37 @@
+{
+  "name": "kidney-stone-detection",
+  "repository": "parathon07/kidney-stone-detection",
+  "description": "Medical deep learning pipeline for binary classification of Kidney Stones in axial CT images (Mendeley Data V2 benchmark).",
+  "ignore": [
+    "data/**",
+    "runs/**",
+    "**/*.keras",
+    "**/*.h5",
+    "**/*.pdf",
+    "**/*.png",
+    "**/*.jpg",
+    "**/*.jpeg",
+    ".pytest_cache/**",
+    "__pycache__/**",
+    "htmlcov/**",
+    ".git/**"
+  ],
+  "context": {
+    "framework": "TensorFlow / Keras 3 / PyTorch",
+    "domain": "Medical Computer Vision & Axial CT Image Classification",
+    "dataset": "Mendeley Data V2 (201 patients: 161 development, 40 sealed test)",
+    "architecture": "Custom 4-block 2D CNN (~4.79M parameters)",
+    "key_principles": [
+      "Strict patient-level data partitioning to prevent data leakage across slices",
+      "5-fold cross-validation with out-of-fold (OOF) optimal threshold tuning via Youden's J",
+      "Deterministic seed enforcement across NumPy, Python random, and TensorFlow",
+      "Immutable experiment logging under runs/<run_id>/"
+    ]
+  },
+  "review_instructions": [
+    "Verify that any changes to data loading or splitting never mix slices from the same patient ID between train, validation, or test sets.",
+    "Ensure image preprocessing and augmentation operations maintain correct channel dimensions (1-channel axial CT) and normalized intensity ranges.",
+    "Check that CLI subcommands in train.py (smoke, prepare, cv, finalize) conform to the pipeline spec.",
+    "Ensure unit tests in tests/ maintain high test coverage."
+  ]
+}

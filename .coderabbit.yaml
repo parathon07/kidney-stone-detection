@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+tone_instructions: "You are an expert AI code reviewer specializing in medical imaging, deep learning pipelines, and production Python software engineering. Provide actionable, high-precision code reviews focusing on data leakage prevention, patient-level splits, numerical stability, and performance."
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+      - master
+  path_filters:
+    - "!**/*.keras"
+    - "!**/*.h5"
+    - "!runs/**"
+    - "!data/**"
+    - "!htmlcov/**"
+    - "!**/*.pdf"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!.pytest_cache/**"
+  path_instructions:
+    - path: "src/**"
+      instructions: "Enforce medical AI best practices: strict patient-level partition isolation (no cross-contamination between train/val/test), deterministic random seeds, Keras 3/TensorFlow compatibility, explicit tensor dimensions, and modularity."
+    - path: "train.py"
+      instructions: "Verify CLI command interfaces (smoke, prepare, cv, finalize), immutable experiment artifact directory structure under runs/<run_id>, correct metric calculations (Youden's J, ROC-AUC, PR-AUC, F1, sensitivity, specificity), and proper checkpoint handling."
+    - path: "configs/**"
+      instructions: "Ensure YAML configurations follow established schemas and hyperparameter defaults consistent with the Mendeley Data V2 benchmark."
+    - path: "tests/**"
+      instructions: "Ensure comprehensive unit testing, edge case handling, mock tensor shapes, and deterministic assertions."
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    enabled: true
+  issues:
+    enabled: true
+  pull_requests:
+    enabled: true
