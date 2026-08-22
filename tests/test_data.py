@@ -66,6 +66,10 @@ def test_parse_filename_metadata():
     assert meta3["label"] == 0
     assert meta3["patient_id"] == "PAT_NONSTONE_14"
 
+    # Unclassified path should raise ValueError
+    with pytest.raises(ValueError):
+        parse_filename_metadata("unclassified_folder/sample_scan.jpg")
+
 
 def test_scan_dataset_and_create_manifest(temp_data_env):
     manifest_path = os.path.join(temp_data_env["root"], "manifest.csv")
@@ -78,6 +82,11 @@ def test_scan_dataset_and_create_manifest(temp_data_env):
     assert set(manifest_df["label"].unique()) == {0, 1}
     assert (manifest_df["is_original"] == True).sum() == 2
     assert (manifest_df["is_original"] == False).sum() == 1
+
+    # Verify Patient_001 original and derivative share patient_id and source_image_id
+    p1_rows = manifest_df[manifest_df["patient_id"] == "PATIENT_001"]
+    assert len(p1_rows) == 2
+    assert len(p1_rows["source_image_id"].unique()) == 1
 
 
 def test_canonical_preprocess_image(temp_data_env):

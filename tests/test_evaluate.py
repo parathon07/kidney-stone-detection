@@ -53,6 +53,7 @@ def test_plotting_functions(temp_eval_dir):
     roc_path = os.path.join(temp_eval_dir, "roc.png")
     pr_path = os.path.join(temp_eval_dir, "pr.png")
     cm_path = os.path.join(temp_eval_dir, "cm.png")
+    curves_path = os.path.join(temp_eval_dir, "learning_curves.png")
 
     plot_roc_curve(y_true, y_prob, roc_path)
     assert os.path.exists(roc_path)
@@ -63,6 +64,10 @@ def test_plotting_functions(temp_eval_dir):
     cm_dict = {"tn": 2, "fp": 0, "fn": 0, "tp": 2}
     plot_confusion_matrix_heatmap(cm_dict, ["Non-Stone", "Stone"], cm_path)
     assert os.path.exists(cm_path)
+
+    # Empty fold directories should safely generate learning curves without throwing
+    plot_cv_learning_curves(temp_eval_dir, n_folds=2, save_path=curves_path)
+    assert os.path.exists(curves_path)
 
 
 def test_evaluate_oof_and_select_threshold(temp_eval_dir):
@@ -92,11 +97,37 @@ def test_evaluate_oof_and_select_threshold(temp_eval_dir):
     assert os.path.exists(os.path.join(temp_eval_dir, "oof_metrics.json"))
 
 
+def test_evaluate_oof_rejects_corrupt_metrics(temp_eval_dir):
+    corrupt_dir = os.path.join(temp_eval_dir, "corrupt_run")
+    f0_dir = os.path.join(corrupt_dir, "fold_0")
+    os.makedirs(f0_dir, exist_ok=True)
+    
+    val_df = pd.DataFrame({
+        "path": ["img_0.jpg"],
+        "patient_id": ["P0"],
+        "source_image_id": ["src_0"],
+        "y_true": [1],
+        "stone_probability": [0.9],
+        "predicted_class_at_0_5": [1],
+        "fold": [0],
+    })
+    val_df.to_csv(os.path.join(f0_dir, "val_predictions.csv"), index=False)
+    # Save corrupt fold_metrics.json missing best_epoch
+    save_json({"fold": 0, "best_val_loss": 0.25}, os.path.join(f0_dir, "fold_metrics.json"))
+
+    config = {"evaluation": {"class_names": ["Non-Stone", "Stone"]}}
+    with pytest.raises(ValueError, match="missing a valid 'best_epoch' field"):
+        evaluate_oof_and_select_threshold(corrupt_dir, config, n_folds=1)
+
+
 def test_export_inference_bundle(temp_eval_dir):
-    # Create fake model file
-    fake_model_path = os.path.join(temp_eval_dir, "fake_model.keras")
-    with open(fake_model_path, "wb") as f:
-        f.write(b"PK\x03\x04fake_keras_binary_model_content")
+    # Create genuine minimal Keras model
+    inputs = tf.keras.Input(shape=(384, 384, 1), name="input_image")
+    outputs = tf.keras.layers.Dense(2, activation="softmax")(tf.keras.layers.GlobalAveragePooling2D()(inputs))
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name="test_export_model")
+    
+    saved_model_path = os.path.join(temp_eval_dir, "model.keras")
+    model.save(saved_model_path)
 
     config = {
         "data": {"image_size": 384, "channels": 1},
@@ -113,12 +144,18 @@ def test_export_inference_bundle(temp_eval_dir):
 
     bundle_dir = export_inference_bundle(
         run_dir=temp_eval_dir,
-        final_model_path=fake_model_path,
+        final_model_path=saved_model_path,
         locked_threshold=0.5234,
         config=config,
         metadata=meta,
     )
 
-    assert os.path.exists(os.path.join(bundle_dir, "model.keras"))
+    bundle_model_file = os.path.join(bundle_dir, "model.keras")
+    assert os.path.exists(bundle_model_file)
     assert os.path.exists(os.path.join(bundle_dir, "inference_config.json"))
     assert os.path.exists(os.path.join(bundle_dir, "provenance.json"))
+
+    # Reload bundle model and verify contracts
+    reloaded_model = tf.keras.models.load_model(bundle_model_file)
+    assert reloaded_model.input_shape == (None, 384, 384, 1)
+    assert reloaded_model.output_shape == (None, 2)
