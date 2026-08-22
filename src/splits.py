@@ -38,8 +38,8 @@ def generate_patient_splits(
     ).reset_index()
 
     total_patients = len(patient_agg)
-    if total_patients != (n_dev + n_test) and total_patients < (n_dev + n_test):
-        # Handle small test or custom subset gracefully with proportional splitting
+    if total_patients != (n_dev + n_test):
+        # Handle custom subset or different dataset cohort gracefully with proportional splitting
         test_ratio = n_test / float(n_dev + n_test)
         actual_test_count = max(1, int(round(total_patients * test_ratio)))
         actual_dev_count = total_patients - actual_test_count

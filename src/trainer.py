@@ -126,7 +126,13 @@ def train_single_fold(
     # 6. Parse history to find best epoch
     history_df = pd.read_csv(history_csv_path)
     best_epoch_idx = int(history_df["val_loss"].idxmin())
-    best_epoch_number = int(history_df.loc[best_epoch_idx, "epoch"]) if "epoch" in history_df.columns else best_epoch_idx + 1
+    if "epoch" in history_df.columns:
+        raw_epoch = int(history_df.loc[best_epoch_idx, "epoch"])
+        # Keras CSVLogger writes 0-indexed epochs (0, 1, 2...). If it starts from 0, convert to 1-indexed count.
+        best_epoch_number = raw_epoch + 1 if history_df["epoch"].min() == 0 else raw_epoch
+    else:
+        best_epoch_number = best_epoch_idx + 1
+    best_epoch_number = max(1, best_epoch_number)
     best_val_loss = float(history_df.loc[best_epoch_idx, "val_loss"])
 
     fold_metrics = {

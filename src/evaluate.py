@@ -13,7 +13,7 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from typing import Dict, Any, Tuple, List
-from src.utils import save_json, save_config, compute_sha256, get_metadata
+from src.utils import save_json, save_config, compute_sha256, get_metadata, load_json
 from src.data import create_dataset
 
 
@@ -178,13 +178,17 @@ def plot_cv_learning_curves(run_dir: str, n_folds: int, save_path: str) -> None:
     axes[0].set_xlabel("Epoch")
     axes[0].set_ylabel("Loss")
     axes[0].grid(True, linestyle=":", alpha=0.6)
-    axes[0].legend()
+    handles0, labels0 = axes[0].get_legend_handles_labels()
+    if handles0:
+        axes[0].legend()
 
     axes[1].set_title("Accuracy")
     axes[1].set_xlabel("Epoch")
     axes[1].set_ylabel("Accuracy")
     axes[1].grid(True, linestyle=":", alpha=0.6)
-    axes[1].legend()
+    handles1, labels1 = axes[1].get_legend_handles_labels()
+    if handles1:
+        axes[1].legend()
 
     plt.tight_layout()
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -208,8 +212,8 @@ def evaluate_oof_and_select_threshold(run_dir: str, config: Dict[str, Any], n_fo
         
         oof_dfs.append(pd.read_csv(pred_path))
         if os.path.exists(metrics_path):
-            f_metrics = pd.read_json(metrics_path, typ="series")
-            best_epochs.append(int(f_metrics["best_epoch"]))
+            f_metrics = load_json(metrics_path)
+            best_epochs.append(int(f_metrics.get("best_epoch", 1)))
 
     pooled_oof_df = pd.concat(oof_dfs, ignore_index=True)
     oof_csv_path = os.path.join(run_dir, "oof_predictions.csv")
