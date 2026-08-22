@@ -28,6 +28,25 @@ def compile_canonical_model(model: tf.keras.Model, config: Dict[str, Any]) -> tf
     return model
 
 
+def compute_best_epoch(history_df: pd.DataFrame) -> Tuple[int, float]:
+    """
+    Extract best epoch number (1-indexed count >= 1) and best validation loss
+    from training history DataFrame.
+    """
+    if "val_loss" not in history_df.columns or history_df.empty:
+        raise ValueError("history DataFrame must contain non-empty 'val_loss' column.")
+    best_epoch_idx = int(history_df["val_loss"].idxmin())
+    if "epoch" in history_df.columns:
+        raw_epoch = int(history_df.loc[best_epoch_idx, "epoch"])
+        # Keras CSVLogger writes 0-indexed epochs (0, 1, 2...). If it starts from 0, convert to 1-indexed count.
+        best_epoch_number = raw_epoch + 1 if history_df["epoch"].min() == 0 else raw_epoch
+    else:
+        best_epoch_number = best_epoch_idx + 1
+    best_epoch_number = max(1, best_epoch_number)
+    best_val_loss = float(history_df.loc[best_epoch_idx, "val_loss"])
+    return best_epoch_number, best_val_loss
+
+
 def train_single_fold(
     fold_idx: int,
     dev_manifest_df: pd.DataFrame,
@@ -125,9 +144,7 @@ def train_single_fold(
 
     # 6. Parse history to find best epoch
     history_df = pd.read_csv(history_csv_path)
-    best_epoch_idx = int(history_df["val_loss"].idxmin())
-    best_epoch_number = int(history_df.loc[best_epoch_idx, "epoch"]) if "epoch" in history_df.columns else best_epoch_idx + 1
-    best_val_loss = float(history_df.loc[best_epoch_idx, "val_loss"])
+    best_epoch_number, best_val_loss = compute_best_epoch(history_df)
 
     fold_metrics = {
         "fold": fold_idx,

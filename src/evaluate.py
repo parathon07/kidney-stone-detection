@@ -3,6 +3,8 @@ import shutil
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import (
@@ -13,7 +15,7 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from typing import Dict, Any, Tuple, List
-from src.utils import save_json, save_config, compute_sha256, get_metadata
+from src.utils import save_json, save_config, compute_sha256, get_metadata, load_json
 from src.data import create_dataset
 
 
@@ -177,14 +179,18 @@ def plot_cv_learning_curves(run_dir: str, n_folds: int, save_path: str) -> None:
     axes[0].set_title("Cross-Entropy Loss")
     axes[0].set_xlabel("Epoch")
     axes[0].set_ylabel("Loss")
-    axes[0].grid(True, linestyle=":", alpha=0.6)
-    axes[0].legend()
+    axes[0].grid(visible=True, linestyle=":", alpha=0.6)
+    handles0, _ = axes[0].get_legend_handles_labels()
+    if handles0:
+        axes[0].legend()
 
     axes[1].set_title("Accuracy")
     axes[1].set_xlabel("Epoch")
     axes[1].set_ylabel("Accuracy")
-    axes[1].grid(True, linestyle=":", alpha=0.6)
-    axes[1].legend()
+    axes[1].grid(visible=True, linestyle=":", alpha=0.6)
+    handles1, _ = axes[1].get_legend_handles_labels()
+    if handles1:
+        axes[1].legend()
 
     plt.tight_layout()
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -205,11 +211,22 @@ def evaluate_oof_and_select_threshold(run_dir: str, config: Dict[str, Any], n_fo
         
         if not os.path.exists(pred_path):
             raise FileNotFoundError(f"Missing fold {fold} predictions at {pred_path}")
+        if not os.path.exists(metrics_path):
+            raise FileNotFoundError(f"Missing fold {fold} metrics at {metrics_path}")
         
         oof_dfs.append(pd.read_csv(pred_path))
-        if os.path.exists(metrics_path):
-            f_metrics = pd.read_json(metrics_path, typ="series")
-            best_epochs.append(int(f_metrics["best_epoch"]))
+        f_metrics = load_json(metrics_path)
+        val_best_epoch = f_metrics.get("best_epoch")
+        if (
+            val_best_epoch is None
+            or isinstance(val_best_epoch, bool)
+            or not isinstance(val_best_epoch, int)
+            or val_best_epoch < 1
+        ):
+            raise ValueError(
+                f"Integrity Error: fold_metrics.json at '{metrics_path}' must contain a positive integer 'best_epoch', got {val_best_epoch!r}"
+            )
+        best_epochs.append(val_best_epoch)
 
     pooled_oof_df = pd.concat(oof_dfs, ignore_index=True)
     oof_csv_path = os.path.join(run_dir, "oof_predictions.csv")
@@ -237,7 +254,7 @@ def evaluate_oof_and_select_threshold(run_dir: str, config: Dict[str, Any], n_fo
         "total_oof_samples": len(pooled_oof_df),
         "locked_threshold_metrics": locked_metrics,
         "best_epochs_per_fold": best_epochs,
-        "median_best_epoch": int(round(float(np.median(best_epochs)))) if best_epochs else 1,
+        "median_best_epoch": int(round(float(np.median(best_epochs)))),
     }
     save_json(oof_results, os.path.join(run_dir, "oof_metrics.json"))
 

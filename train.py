@@ -10,6 +10,7 @@ from src.utils import (
     load_config,
     save_config,
     save_json,
+    load_json,
     set_seed,
     compute_sha256,
     get_metadata,
@@ -216,14 +217,11 @@ def run_finalize(args: argparse.Namespace) -> None:
     if not os.path.exists(oof_metrics_path) or not os.path.exists(threshold_path):
         raise FileNotFoundError("OOF metrics or threshold.json missing. Ensure 5-fold CV was completed.")
 
-    import json
-    with open(threshold_path, "r", encoding="utf-8") as f:
-        threshold_data = json.load(f)
+    threshold_data = load_json(threshold_path)
     locked_threshold = float(threshold_data["threshold"])
 
-    with open(oof_metrics_path, "r", encoding="utf-8") as f:
-        oof_data = json.load(f)
-    final_epochs = int(oof_data["median_best_epoch"])
+    oof_data = load_json(oof_metrics_path)
+    final_epochs = max(1, int(oof_data["median_best_epoch"]))
 
     print(f"Resolved locked threshold: {locked_threshold:.4f}")
     print(f"Resolved final training epoch budget: {final_epochs}")
@@ -262,8 +260,7 @@ def run_finalize(args: argparse.Namespace) -> None:
     metadata_path = os.path.join(run_dir, "metadata.json")
     metadata = {}
     if os.path.exists(metadata_path):
-        with open(metadata_path, "r", encoding="utf-8") as f:
-            metadata = json.load(f)
+        metadata = load_json(metadata_path)
 
     bundle_dir = export_inference_bundle(
         run_dir=run_dir,
