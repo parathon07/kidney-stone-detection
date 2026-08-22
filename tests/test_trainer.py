@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 import pytest
 
-from src.trainer import compile_canonical_model
+from src.trainer import compile_canonical_model, compute_best_epoch
 from src.model import build_model
 from src.utils import save_json, load_json
 
@@ -45,26 +45,27 @@ def test_trainer_epoch_normalization_rules():
         "loss": [0.5, 0.4, 0.3, 0.2],
         "val_loss": [0.15, 0.20, 0.25, 0.30],
     })
-    best_idx1 = int(hist1["val_loss"].idxmin())
-    raw_epoch1 = int(hist1.loc[best_idx1, "epoch"])
-    epoch1 = raw_epoch1 + 1 if hist1["epoch"].min() == 0 else raw_epoch1
+    epoch1, loss1 = compute_best_epoch(hist1)
     assert epoch1 == 1
+    assert np.isclose(loss1, 0.15)
 
     # Case 2: Best loss at epoch 3 in 0-indexed history
     hist2 = pd.DataFrame({
         "epoch": [0, 1, 2, 3],
         "val_loss": [0.4, 0.3, 0.2, 0.1],
     })
-    best_idx2 = int(hist2["val_loss"].idxmin())
-    raw_epoch2 = int(hist2.loc[best_idx2, "epoch"])
-    epoch2 = raw_epoch2 + 1 if hist2["epoch"].min() == 0 else raw_epoch2
+    epoch2, loss2 = compute_best_epoch(hist2)
     assert epoch2 == 4
+    assert np.isclose(loss2, 0.1)
 
     # Case 3: Missing epoch column
     hist3 = pd.DataFrame({
         "val_loss": [0.9, 0.8, 0.5, 0.7],
     })
-    best_idx3 = int(hist3["val_loss"].idxmin())
-    epoch3 = best_idx3 + 1
+    epoch3, loss3 = compute_best_epoch(hist3)
     assert epoch3 == 3
-    assert epoch3 >= 1
+    assert np.isclose(loss3, 0.5)
+
+    # Case 4: Invalid DataFrame without val_loss raises ValueError
+    with pytest.raises(ValueError):
+        compute_best_epoch(pd.DataFrame({"train_loss": [1.0, 0.5]}))

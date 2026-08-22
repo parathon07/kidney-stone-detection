@@ -3,6 +3,8 @@ import shutil
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import (
@@ -209,13 +211,22 @@ def evaluate_oof_and_select_threshold(run_dir: str, config: Dict[str, Any], n_fo
         
         if not os.path.exists(pred_path):
             raise FileNotFoundError(f"Missing fold {fold} predictions at {pred_path}")
+        if not os.path.exists(metrics_path):
+            raise FileNotFoundError(f"Missing fold {fold} metrics at {metrics_path}")
         
         oof_dfs.append(pd.read_csv(pred_path))
-        if os.path.exists(metrics_path):
-            f_metrics = load_json(metrics_path)
-            if "best_epoch" not in f_metrics or not isinstance(f_metrics["best_epoch"], (int, float)) or f_metrics["best_epoch"] < 1:
-                raise ValueError(f"Integrity Error: fold_metrics.json at '{metrics_path}' is missing a valid 'best_epoch' field.")
-            best_epochs.append(int(f_metrics["best_epoch"]))
+        f_metrics = load_json(metrics_path)
+        val_best_epoch = f_metrics.get("best_epoch")
+        if (
+            val_best_epoch is None
+            or isinstance(val_best_epoch, bool)
+            or not isinstance(val_best_epoch, int)
+            or val_best_epoch < 1
+        ):
+            raise ValueError(
+                f"Integrity Error: fold_metrics.json at '{metrics_path}' must contain a positive integer 'best_epoch', got {val_best_epoch!r}"
+            )
+        best_epochs.append(val_best_epoch)
 
     pooled_oof_df = pd.concat(oof_dfs, ignore_index=True)
     oof_csv_path = os.path.join(run_dir, "oof_predictions.csv")
@@ -243,7 +254,7 @@ def evaluate_oof_and_select_threshold(run_dir: str, config: Dict[str, Any], n_fo
         "total_oof_samples": len(pooled_oof_df),
         "locked_threshold_metrics": locked_metrics,
         "best_epochs_per_fold": best_epochs,
-        "median_best_epoch": int(round(float(np.median(best_epochs)))) if best_epochs else 1,
+        "median_best_epoch": int(round(float(np.median(best_epochs)))),
     }
     save_json(oof_results, os.path.join(run_dir, "oof_metrics.json"))
 

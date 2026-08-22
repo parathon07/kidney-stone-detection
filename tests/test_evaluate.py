@@ -97,7 +97,7 @@ def test_evaluate_oof_and_select_threshold(temp_eval_dir):
     assert os.path.exists(os.path.join(temp_eval_dir, "oof_metrics.json"))
 
 
-def test_evaluate_oof_rejects_corrupt_metrics(temp_eval_dir):
+def test_evaluate_oof_rejects_missing_or_corrupt_metrics(temp_eval_dir):
     corrupt_dir = os.path.join(temp_eval_dir, "corrupt_run")
     f0_dir = os.path.join(corrupt_dir, "fold_0")
     os.makedirs(f0_dir, exist_ok=True)
@@ -112,11 +112,31 @@ def test_evaluate_oof_rejects_corrupt_metrics(temp_eval_dir):
         "fold": [0],
     })
     val_df.to_csv(os.path.join(f0_dir, "val_predictions.csv"), index=False)
-    # Save corrupt fold_metrics.json missing best_epoch
-    save_json({"fold": 0, "best_val_loss": 0.25}, os.path.join(f0_dir, "fold_metrics.json"))
-
     config = {"evaluation": {"class_names": ["Non-Stone", "Stone"]}}
-    with pytest.raises(ValueError, match="missing a valid 'best_epoch' field"):
+
+    # Case 1: Missing fold_metrics.json file entirely
+    with pytest.raises(FileNotFoundError):
+        evaluate_oof_and_select_threshold(corrupt_dir, config, n_folds=1)
+
+    # Case 2: fold_metrics.json missing best_epoch
+    metrics_path = os.path.join(f0_dir, "fold_metrics.json")
+    save_json({"fold": 0, "best_val_loss": 0.25}, metrics_path)
+    with pytest.raises(ValueError, match="positive integer 'best_epoch'"):
+        evaluate_oof_and_select_threshold(corrupt_dir, config, n_folds=1)
+
+    # Case 3: best_epoch = 0
+    save_json({"fold": 0, "best_epoch": 0, "best_val_loss": 0.25}, metrics_path)
+    with pytest.raises(ValueError, match="positive integer 'best_epoch'"):
+        evaluate_oof_and_select_threshold(corrupt_dir, config, n_folds=1)
+
+    # Case 4: best_epoch is boolean True
+    save_json({"fold": 0, "best_epoch": True, "best_val_loss": 0.25}, metrics_path)
+    with pytest.raises(ValueError, match="positive integer 'best_epoch'"):
+        evaluate_oof_and_select_threshold(corrupt_dir, config, n_folds=1)
+
+    # Case 5: best_epoch is float
+    save_json({"fold": 0, "best_epoch": 3.14, "best_val_loss": 0.25}, metrics_path)
+    with pytest.raises(ValueError, match="positive integer 'best_epoch'"):
         evaluate_oof_and_select_threshold(corrupt_dir, config, n_folds=1)
 
 
