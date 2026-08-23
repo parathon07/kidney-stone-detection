@@ -41,57 +41,70 @@ def parse_filename_metadata(rel_path: str) -> Dict[str, Any]:
     is_augmented = False
     aug_type = "none"
     
+    # Mendeley V2 specific augmentation suffixes
+    mendeley_aug_suffixes = ["do", "el", "fh", "fv", "gb", "gn", "mul", "pa", "pe"]
     aug_keywords = ["augmented", "aug_", "_aug", "_rot", "_flip", "_trans", "_scale", "_bright", "_contrast", "_noise", "_zoom"]
-    for kw in aug_keywords:
-        if kw in normalized_path:
+    
+    # Priority 1: Check filename suffix code directly
+    for code in mendeley_aug_suffixes:
+        if stem.endswith(f"_{code}"):
             is_augmented = True
-            aug_type = kw.strip("_/")
+            aug_type = code.upper()
             break
+
+    # Priority 2: Check explicit augmentation keywords in path/filename if not matched above
+    if not is_augmented:
+        for kw in aug_keywords:
+            if kw in normalized_path:
+                is_augmented = True
+                aug_type = kw.strip("_/")
+                break
 
     is_original = not is_augmented
 
     # 3. Extract Patient ID & Source Image ID
-    # Patterns common in Mendeley V2 and medical datasets:
-    # e.g., Patient_001_slice_05, P012_..., Case_42_..., Normal (12).jpg, Stone- (105).jpg
+    # Pattern e.g., P001_FA_M_NS_I01 or P135_RA_F_S_I13_PE
     patient_id = "unknown"
-    source_image_id = stem
-
-    # Check for P<digits> or Patient_<digits> or Case_<digits>
-    pat_match = re.search(r"(patient[_\-\s]?\d+|case[_\-\s]?\d+|p\d+)", stem, re.IGNORECASE)
+    
+    pat_match = re.search(r"(p\d+|patient[_\-\s]?\d+|case[_\-\s]?\d+)", stem, re.IGNORECASE)
     if pat_match:
         patient_id = pat_match.group(1).upper().replace(" ", "_").replace("-", "_")
     else:
-        # Check folder structure for patient identifier
         parts = normalized_path.split("/")
         for part in parts[:-1]:
-            folder_pat = re.search(r"(patient[_\-\s]?\d+|case[_\-\s]?\d+|p\d+)", part, re.IGNORECASE)
+            folder_pat = re.search(r"(p\d+|patient[_\-\s]?\d+|case[_\-\s]?\d+)", part, re.IGNORECASE)
             if folder_pat:
                 patient_id = folder_pat.group(1).upper().replace(" ", "_").replace("-", "_")
                 break
         
-        # Fallback for parenthesized numbers e.g. "Normal (15).jpg" -> Patient from index / parent folder
         if patient_id == "unknown":
             num_match = re.search(r"\((\d+)\)", stem)
             if num_match:
-                # Group by image index modulo or direct id
                 patient_id = f"PAT_{'STONE' if label == 1 else 'NONSTONE'}_{num_match.group(1)}"
             else:
-                # Use clean stem as unique patient representation
                 patient_id = f"PAT_{'STONE' if label == 1 else 'NONSTONE'}_{stem}"
 
     # Strip augmentation suffixes to establish canonical source_image_id
     clean_source = stem
+    for code in mendeley_aug_suffixes:
+        if clean_source.endswith(f"_{code}"):
+            clean_source = clean_source[:-len(f"_{code}")]
+            break
     for kw in aug_keywords:
         clean_source = re.sub(rf"{kw}[a-zA-Z0-9_\-]*", "", clean_source, flags=re.IGNORECASE)
     clean_source = clean_source.strip("_-")
     source_image_id = f"{'stone' if label == 1 else 'nonstone'}_{clean_source}"
 
-    # Hospital/metadata site tag if present
+    # Hospital/metadata site tag if present (e.g. FA, ME, RA in Mendeley dataset)
     hospital = "default_site"
-    for site in ["hospital_a", "hospital_b", "site1", "site2", "center1", "center2"]:
-        if site in normalized_path:
-            hospital = site
-            break
+    mendeley_parts = stem.split("_")
+    if len(mendeley_parts) >= 5 and mendeley_parts[0].upper().startswith("P"):
+        hospital = mendeley_parts[1].upper()
+    else:
+        for site in ["hospital_a", "hospital_b", "site1", "site2", "center1", "center2", "fa", "me", "ra"]:
+            if site in normalized_path:
+                hospital = site.upper()
+                break
 
     return {
         "label": label,
@@ -112,16 +125,48 @@ def compute_file_sha256(filepath: str) -> str:
     return hasher.hexdigest()
 
 
-def scan_dataset_and_create_manifest(data_dir: str, output_manifest_path: str = "data/manifest.csv") -> pd.DataFrame:
+def _process_single_image(args: Tuple[str, str]) -> Dict[str, Any]:
+    full_path, rel_path = args
+    try:
+        with Image.open(full_path) as img:
+            img.load()
+            width, height = img.size
+            channels = len(img.getbands())
+    except Exception as e:
+        raise RuntimeError(f"Corrupt or unreadable image file: {full_path} - {str(e)}")
+
+    sha256_hash = compute_file_sha256(full_path)
+    meta = parse_filename_metadata(rel_path)
+
+    return {
+        "path": rel_path,
+        "sha256": sha256_hash,
+        "patient_id": meta["patient_id"],
+        "source_image_id": meta["source_image_id"],
+        "label": meta["label"],
+        "is_original": meta["is_original"],
+        "augmentation_type": meta["augmentation_type"],
+        "hospital": meta["hospital"],
+        "height": height,
+        "width": width,
+        "channels": channels,
+    }
+
+
+def scan_dataset_and_create_manifest(
+    data_dir: str,
+    output_manifest_path: str = "data/manifest.csv",
+    max_workers: int = 16,
+) -> pd.DataFrame:
     """
-    Scan dataset directory, decode every image for dimensions, hash contents,
+    Scan dataset directory concurrently, decode every image for dimensions, hash contents,
     parse metadata, and write canonical data/manifest.csv.
     """
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory not found: {data_dir}")
 
-    records = []
     supported_exts = {".jpg", ".jpeg", ".png"}
+    tasks = []
 
     for root, _, files in os.walk(data_dir):
         for file in files:
@@ -129,34 +174,14 @@ def scan_dataset_and_create_manifest(data_dir: str, output_manifest_path: str = 
             if ext in supported_exts:
                 full_path = os.path.join(root, file)
                 rel_path = os.path.relpath(full_path, data_dir).replace("\\", "/")
-                
-                # Integrity check: decode image dimensions
-                try:
-                    with Image.open(full_path) as img:
-                        width, height = img.size
-                        channels = len(img.getbands())
-                except Exception as e:
-                    raise RuntimeError(f"Corrupt or unreadable image file: {full_path} - {str(e)}")
+                tasks.append((full_path, rel_path))
 
-                sha256_hash = compute_file_sha256(full_path)
-                meta = parse_filename_metadata(rel_path)
-
-                records.append({
-                    "path": rel_path,
-                    "sha256": sha256_hash,
-                    "patient_id": meta["patient_id"],
-                    "source_image_id": meta["source_image_id"],
-                    "label": meta["label"],
-                    "is_original": meta["is_original"],
-                    "augmentation_type": meta["augmentation_type"],
-                    "hospital": meta["hospital"],
-                    "height": height,
-                    "width": width,
-                    "channels": channels,
-                })
-
-    if not records:
+    if not tasks:
         raise ValueError(f"No valid images found in dataset directory: {data_dir}")
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        records = list(executor.map(_process_single_image, tasks))
 
     manifest_df = pd.DataFrame(records)
     

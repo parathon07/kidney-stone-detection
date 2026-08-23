@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
+import networkx as nx
 from typing import Tuple, Dict, Any
 from src.utils import compute_sha256
 
@@ -15,9 +15,10 @@ def generate_patient_splits(
     seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Generate deterministic patient-wise splits per Section 4.3:
-      - Exactly 161 development patients and 40 test patients.
+    Generate deterministic patient-wise splits per Section 4.3 using group-aware connected component clustering:
+      - Exactly 161 development patients and 40 test patients (or matching dataset proportion).
       - 5 patient-wise CV folds inside development patients.
+      - Patients sharing exact SHA-256 duplicate slices or source IDs are kept in the same partition.
       - Group-aware and class-stratified.
     """
     os.makedirs(splits_dir, exist_ok=True)
@@ -30,70 +31,105 @@ def generate_patient_splits(
         cv_df = pd.read_csv(cv_path)
         return outer_df, cv_df
 
-    # Aggregate class label at patient level
-    patient_agg = manifest_df.groupby("patient_id")["label"].agg(
-        stone_ratio=lambda s: (s == 1).mean(),
-        majority_label=lambda s: int(s.mode()[0] if not s.mode().empty else s.iloc[0]),
-        total_images="count",
-    ).reset_index()
+    # 1. Build Patient Graph to link any patients sharing duplicate SHA256 hashes or source IDs
+    G = nx.Graph()
+    for p in manifest_df["patient_id"].unique():
+        G.add_node(p)
+        
+    for _, pats in manifest_df.groupby("sha256")["patient_id"].unique().items():
+        if len(pats) > 1:
+            for i in range(len(pats) - 1):
+                G.add_edge(pats[i], pats[i + 1])
 
-    total_patients = len(patient_agg)
+    for _, pats in manifest_df.groupby("source_image_id")["patient_id"].unique().items():
+        if len(pats) > 1:
+            for i in range(len(pats) - 1):
+                G.add_edge(pats[i], pats[i + 1])
+
+    components = [sorted(list(c)) for c in nx.connected_components(G)]
+    
+    # Majority class label per patient
+    pat_labels = manifest_df.groupby("patient_id")["label"].agg(
+        lambda s: int(s.mode()[0] if not s.mode().empty else s.iloc[0])
+    ).to_dict()
+
+    comp_records = []
+    for c in components:
+        component_labels = {pat_labels[p] for p in c}
+        if len(component_labels) > 1:
+            raise ValueError(f"Conflicting class labels within connected patient component {c}: {component_labels}")
+        comp_records.append({
+            "comp": c,
+            "size": len(c),
+            "label": list(component_labels)[0],
+            "id": c[0],
+        })
+
+    # Sort components deterministically
+    comp_records = sorted(comp_records, key=lambda x: (x["label"], -x["size"], x["id"]))
+
+    total_patients = len(manifest_df["patient_id"].unique())
     if total_patients != (n_dev + n_test):
-        # Handle custom subset or different dataset cohort gracefully with proportional splitting
         test_ratio = n_test / float(n_dev + n_test)
         actual_test_count = max(1, int(round(total_patients * test_ratio)))
-        actual_dev_count = total_patients - actual_test_count
     else:
-        actual_dev_count = n_dev
         actual_test_count = n_test
 
-    # Deterministic patient ordering
-    patient_agg = patient_agg.sort_values(by=["majority_label", "patient_id"]).reset_index(drop=True)
-    rng = np.random.RandomState(seed)
-    
-    # Stratified selection for outer test set
-    test_patient_ids = []
-    dev_patient_ids = []
-    
+    target_test_per_label = {
+        0: actual_test_count // 2,
+        1: actual_test_count - (actual_test_count // 2),
+    }
+
+    test_pats = []
+    dev_comps = []
+    curr_test = {0: 0, 1: 0}
+
+    for c in comp_records:
+        lbl = c["label"]
+        if curr_test[lbl] + c["size"] <= target_test_per_label[lbl]:
+            test_pats.extend(c["comp"])
+            curr_test[lbl] += c["size"]
+        else:
+            dev_comps.append(c)
+
+    # If any shortfall in test due to discrete component sizes, fill with remaining singletons
+    if len(test_pats) < actual_test_count and dev_comps:
+        rem_needed = actual_test_count - len(test_pats)
+        remaining_dev = []
+        for c in dev_comps:
+            if c["size"] <= rem_needed and rem_needed > 0:
+                test_pats.extend(c["comp"])
+                rem_needed -= c["size"]
+            else:
+                remaining_dev.append(c)
+        dev_comps = remaining_dev
+
+    # 5-fold Stratified Patient CV inside Development components
+    fold_pats = {i: [] for i in range(n_folds)}
     for lbl in [0, 1]:
-        sub_df = patient_agg[patient_agg["majority_label"] == lbl]
-        n_lbl_test = int(round(actual_test_count * (len(sub_df) / float(total_patients))))
-        lbl_patients = list(sub_df["patient_id"].values)
-        rng.shuffle(lbl_patients)
-        
-        test_patient_ids.extend(lbl_patients[:n_lbl_test])
-        dev_patient_ids.extend(lbl_patients[n_lbl_test:])
+        lbl_comps = [c for c in dev_comps if c["label"] == lbl]
+        for c in lbl_comps:
+            # Assign component to fold with fewest patients of this label
+            best_f = min(
+                range(n_folds),
+                key=lambda f: (sum(1 for p in fold_pats[f] if pat_labels[p] == lbl), len(fold_pats[f])),
+            )
+            fold_pats[best_f].extend(c["comp"])
 
-    # Adjust counts to match exact target if rounding caused +-1 difference
-    if len(test_patient_ids) > actual_test_count:
-        excess = len(test_patient_ids) - actual_test_count
-        to_move = test_patient_ids[:excess]
-        test_patient_ids = test_patient_ids[excess:]
-        dev_patient_ids.extend(to_move)
-    elif len(test_patient_ids) < actual_test_count and len(dev_patient_ids) > 0:
-        deficit = actual_test_count - len(test_patient_ids)
-        to_move = dev_patient_ids[:deficit]
-        dev_patient_ids = dev_patient_ids[deficit:]
-        test_patient_ids.extend(to_move)
+    outer_rows = []
+    cv_rows = []
+    for f in range(n_folds):
+        for p in fold_pats[f]:
+            outer_rows.append({"patient_id": p, "split": "development"})
+            cv_rows.append({"patient_id": p, "fold": f})
 
-    outer_records = []
-    for pid in dev_patient_ids:
-        outer_records.append({"patient_id": pid, "split": "development"})
-    for pid in test_patient_ids:
-        outer_records.append({"patient_id": pid, "split": "test"})
+    for p in test_pats:
+        outer_rows.append({"patient_id": p, "split": "test"})
 
-    outer_df = pd.DataFrame(outer_records).sort_values(by=["patient_id"]).reset_index(drop=True)
+    outer_df = pd.DataFrame(outer_rows).sort_values(by=["patient_id"]).reset_index(drop=True)
+    cv_df = pd.DataFrame(cv_rows).sort_values(by=["patient_id"]).reset_index(drop=True)
+
     outer_df.to_csv(outer_path, index=False)
-
-    # 5-fold Stratified Patient CV inside Development patients
-    dev_sub = patient_agg[patient_agg["patient_id"].isin(dev_patient_ids)].sort_values(by=["patient_id"]).reset_index(drop=True)
-    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
-    
-    dev_sub["fold"] = -1
-    for fold_idx, (_, val_idx) in enumerate(skf.split(dev_sub["patient_id"], dev_sub["majority_label"])):
-        dev_sub.loc[val_idx, "fold"] = fold_idx
-
-    cv_df = dev_sub[["patient_id", "fold"]].sort_values(by=["patient_id"]).reset_index(drop=True)
     cv_df.to_csv(cv_path, index=False)
 
     return outer_df, cv_df
@@ -146,12 +182,19 @@ def load_and_validate_splits(
     dev_manifest = merged[merged["split"] == "development"]
     test_manifest = merged[merged["split"] == "test"]
 
-    # 1. Patient Overlap Check
+    # 1. Patient Overlap & Partition Count Checks
     dev_patients = set(dev_manifest["patient_id"].unique())
     test_patients = set(test_manifest["patient_id"].unique())
     patient_overlap = dev_patients.intersection(test_patients)
     if patient_overlap:
         raise ValueError(f"Data Leakage: {len(patient_overlap)} patients appear in both dev and test: {patient_overlap}")
+
+    total_unique_pats = len(dev_patients) + len(test_patients)
+    if total_unique_pats == (expected_dev + expected_test):
+        if len(dev_patients) != expected_dev:
+            raise ValueError(f"Integrity Error: Expected {expected_dev} development patients, found {len(dev_patients)}")
+        if len(test_patients) != expected_test:
+            raise ValueError(f"Integrity Error: Expected {expected_test} test patients, found {len(test_patients)}")
 
     # 2. Source Image ID Check (Dev vs Test)
     dev_sources = set(dev_manifest["source_image_id"].unique())
