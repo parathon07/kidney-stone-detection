@@ -13,6 +13,10 @@ data/
 runs/
 *.keras
 *.h5
+*.zip
+*.rar
+*.crdownload
+*.tmp
 
 # OS and IDE files
 .DS_Store
