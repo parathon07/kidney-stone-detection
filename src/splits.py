@@ -55,10 +55,13 @@ def generate_patient_splits(
 
     comp_records = []
     for c in components:
+        component_labels = {pat_labels[p] for p in c}
+        if len(component_labels) > 1:
+            raise ValueError(f"Conflicting class labels within connected patient component {c}: {component_labels}")
         comp_records.append({
             "comp": c,
             "size": len(c),
-            "label": pat_labels[c[0]],
+            "label": list(component_labels)[0],
             "id": c[0],
         })
 
@@ -92,13 +95,14 @@ def generate_patient_splits(
     # If any shortfall in test due to discrete component sizes, fill with remaining singletons
     if len(test_pats) < actual_test_count and dev_comps:
         rem_needed = actual_test_count - len(test_pats)
-        for i, c in enumerate(dev_comps):
-            if c["size"] <= rem_needed:
+        remaining_dev = []
+        for c in dev_comps:
+            if c["size"] <= rem_needed and rem_needed > 0:
                 test_pats.extend(c["comp"])
                 rem_needed -= c["size"]
-                dev_comps.pop(i)
-                if rem_needed == 0:
-                    break
+            else:
+                remaining_dev.append(c)
+        dev_comps = remaining_dev
 
     # 5-fold Stratified Patient CV inside Development components
     fold_pats = {i: [] for i in range(n_folds)}
@@ -178,12 +182,19 @@ def load_and_validate_splits(
     dev_manifest = merged[merged["split"] == "development"]
     test_manifest = merged[merged["split"] == "test"]
 
-    # 1. Patient Overlap Check
+    # 1. Patient Overlap & Partition Count Checks
     dev_patients = set(dev_manifest["patient_id"].unique())
     test_patients = set(test_manifest["patient_id"].unique())
     patient_overlap = dev_patients.intersection(test_patients)
     if patient_overlap:
         raise ValueError(f"Data Leakage: {len(patient_overlap)} patients appear in both dev and test: {patient_overlap}")
+
+    total_unique_pats = len(dev_patients) + len(test_patients)
+    if total_unique_pats == (expected_dev + expected_test):
+        if len(dev_patients) != expected_dev:
+            raise ValueError(f"Integrity Error: Expected {expected_dev} development patients, found {len(dev_patients)}")
+        if len(test_patients) != expected_test:
+            raise ValueError(f"Integrity Error: Expected {expected_test} test patients, found {len(test_patients)}")
 
     # 2. Source Image ID Check (Dev vs Test)
     dev_sources = set(dev_manifest["source_image_id"].unique())

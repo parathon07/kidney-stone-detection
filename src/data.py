@@ -41,19 +41,19 @@ def parse_filename_metadata(rel_path: str) -> Dict[str, Any]:
     is_augmented = False
     aug_type = "none"
     
-    # Check directory and filename suffixes
+    # Mendeley V2 specific augmentation suffixes
     mendeley_aug_suffixes = ["do", "el", "fh", "fv", "gb", "gn", "mul", "pa", "pe"]
     aug_keywords = ["augmented", "aug_", "_aug", "_rot", "_flip", "_trans", "_scale", "_bright", "_contrast", "_noise", "_zoom"]
     
-    if "augmented" in normalized_path:
-        is_augmented = True
-        aug_type = "augmented"
-        # Try to find specific transform code at the end of stem
-        for code in mendeley_aug_suffixes:
-            if stem.endswith(f"_{code}"):
-                aug_type = code.upper()
-                break
-    else:
+    # Priority 1: Check filename suffix code directly
+    for code in mendeley_aug_suffixes:
+        if stem.endswith(f"_{code}"):
+            is_augmented = True
+            aug_type = code.upper()
+            break
+
+    # Priority 2: Check explicit augmentation keywords in path/filename if not matched above
+    if not is_augmented:
         for kw in aug_keywords:
             if kw in normalized_path:
                 is_augmented = True
@@ -129,6 +129,7 @@ def _process_single_image(args: Tuple[str, str]) -> Dict[str, Any]:
     full_path, rel_path = args
     try:
         with Image.open(full_path) as img:
+            img.load()
             width, height = img.size
             channels = len(img.getbands())
     except Exception as e:
