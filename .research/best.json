@@ -1,0 +1,27 @@
+{
+  "status": "GOOD_ENOUGH",
+  "experiment_id": "E023",
+  "kind": "development_transfer_safe_candidate",
+  "run_dir": "D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv",
+  "commit_anchor": "68b0c8d",
+  "patient_oof_auc": 0.8534136546,
+  "slice_oof_auc": 0.8140357018,
+  "fold_patient_auc": [0.9375, 0.9375, 0.8639705882, 0.9125, 0.9208333333],
+  "mean_fold_patient_auc": 0.9144607843,
+  "worst_fold_patient_auc": 0.8639705882,
+  "locked_threshold": 0.4531617227,
+  "verification": {
+    "complete_cv": true,
+    "oof_gates": "PASS",
+    "development_transfer_guard": "PASS",
+    "probability_std": 0.3730257534,
+    "ks_vs_oof": 0.1304347826,
+    "threshold_positive_rate_delta": 0.0621118012,
+    "repeat_confirmed": true,
+    "tests": "47 passed",
+    "cli_smoke": "PASS",
+    "sealed_test_touched": false
+  },
+  "ensemble": "equal_mean_of_five_fold_best_checkpoints",
+  "why_current_best": "E023 improves patient OOF ROC-AUC over E000 by 0.049274, passes all OOF and development transfer gates, and passes the final correctness suite. It is the current verified development candidate; sealed-test evaluation remains prohibited."
+}

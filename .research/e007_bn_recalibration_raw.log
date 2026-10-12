@@ -1,0 +1,12 @@
+2026-09-10 02:49:01.896409: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 02:49:04.200567: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 02:49:05.166740: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-09-10 02:54:22.342566: I tensorflow/core/framework/local_rendezvous.cc:407] Local rendezvous is aborting with status: OUT_OF_RANGE: End of sequence
+BN_CALIBRATION_PASS 1/3 images=2796
+2026-09-10 02:59:34.357849: I tensorflow/core/framework/local_rendezvous.cc:407] Local rendezvous is aborting with status: OUT_OF_RANGE: End of sequence
+BN_CALIBRATION_PASS 2/3 images=2796
+BN_CALIBRATION_PASS 3/3 images=2796
+Recalibrated model saved to: runs/20260910_e007_bn_recalibration\final\model.keras
+WARNING: Final development transfer gates failed; sealed test evaluation will be skipped.
+E007_TRANSFER_RESULT {'patient_level': True, 'n_patients': 161, 'probability_mean': 0.4494364805062597, 'probability_std': 0.4336866895204286, 'ks_vs_oof': 0.32298136645962733, 'locked_threshold': 0.4280699441830316, 'gates': {'prob_std': {'value': 0.4336866895204286, 'passed': True}, 'ks_vs_oof': {'value': 0.32298136645962733, 'passed': False}, 'threshold_transfer': {'oof_pos_rate': 0.4968944099378882, 'development_pos_rate': 0.4658385093167702, 'delta': 0.031055900621118016, 'passed': True}}, 'gates_passed': False}

@@ -1,0 +1,1547 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kidney-stone CNN — project explainer</title>
+  <style>
+    :root {
+      --bg: #000;
+      --fg: #f4f4f4;
+      --strong: #fff;
+      --muted: #aaa;
+      --dim: #707070;
+      --line: #333;
+      --line-strong: #777;
+      --surface: #111;
+      --surface-2: #181818;
+      --sidebar-w: 248px;
+      --content-max: 1180px;
+      --radius: 4px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      background: var(--bg);
+      color-scheme: dark;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.55;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--fg);
+      text-decoration-color: var(--dim);
+      text-underline-offset: 3px;
+    }
+
+    a:hover { text-decoration-color: var(--strong); }
+
+    button, input { font: inherit; }
+
+    button {
+      color: var(--fg);
+      background: var(--bg);
+      border: 1px solid var(--line-strong);
+      border-radius: 2px;
+      cursor: pointer;
+      padding: 8px 11px;
+      text-align: left;
+    }
+
+    button:hover,
+    button:focus-visible {
+      color: var(--bg);
+      background: var(--strong);
+      border-color: var(--strong);
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--strong);
+      outline-offset: 3px;
+    }
+
+    code, pre, .eyebrow, .section-number, .metric-label, .small-label, .step-index {
+      font-family: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+    }
+
+    code {
+      color: var(--strong);
+      background: var(--surface);
+      padding: 1px 4px;
+    }
+
+    .app-shell { min-height: 100vh; }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: var(--sidebar-w);
+      border-right: 1px solid var(--line);
+      padding: 26px 20px;
+      background: var(--bg);
+      overflow-y: auto;
+      z-index: 5;
+    }
+
+    .rail-title {
+      margin: 0 0 6px;
+      color: var(--strong);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .rail-subtitle {
+      margin: 0 0 28px;
+      color: var(--dim);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .section-nav {
+      display: grid;
+      gap: 2px;
+    }
+
+    .section-nav a {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 8px;
+      padding: 8px 0 8px 9px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: 12px;
+      text-decoration: none;
+    }
+
+    .section-nav a:hover { color: var(--strong); }
+
+    .section-nav a.active {
+      border-left-color: var(--strong);
+      color: var(--strong);
+    }
+
+    .section-number { color: inherit; }
+
+    .rail-footer {
+      margin-top: 34px;
+      padding-top: 15px;
+      border-top: 1px solid var(--line);
+      color: var(--dim);
+      font-size: 11px;
+    }
+
+    main {
+      margin-left: var(--sidebar-w);
+      scroll-snap-type: y proximity;
+    }
+
+    section {
+      min-height: 78vh;
+      max-width: var(--content-max);
+      margin: 0 auto;
+      padding: 78px 58px 96px;
+      scroll-snap-align: start;
+    }
+
+    section + section { border-top: 1px solid var(--line); }
+
+    .eyebrow {
+      margin-bottom: 17px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      color: var(--strong);
+      line-height: 1.08;
+      font-weight: 700;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin: 0;
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      font-size: clamp(42px, 6vw, 78px);
+      letter-spacing: -.035em;
+    }
+
+    h2 {
+      margin: 0 0 13px;
+      font-size: clamp(28px, 4vw, 46px);
+      letter-spacing: -.02em;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    p { max-width: 760px; }
+
+    .lead {
+      max-width: 780px;
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2.1vw, 25px);
+      line-height: 1.42;
+    }
+
+    .section-intro {
+      max-width: 750px;
+      margin: 0 0 32px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .caption {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    .hero-figure,
+    .figure {
+      margin: 44px 0 0;
+      padding: 22px;
+      border: 1px solid var(--line);
+      background: #080808;
+    }
+
+    .hero-figure svg,
+    .figure svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .svg-label {
+      fill: var(--strong);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .svg-small {
+      fill: var(--muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 11px;
+    }
+
+    .svg-line { stroke: var(--line-strong); stroke-width: 2; fill: none; }
+    .svg-line-dash { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 7 6; fill: none; }
+    .svg-box { fill: #090909; stroke: var(--line-strong); stroke-width: 1.5; }
+    .svg-box-strong { fill: #151515; stroke: var(--strong); stroke-width: 2; }
+
+    .stat-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      margin: 35px 0 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stat-strip > div {
+      padding: 17px 18px 17px 0;
+      border-right: 1px solid var(--line);
+    }
+
+    .stat-strip > div:not(:first-child) { padding-left: 18px; }
+    .stat-strip > div:last-child { border-right: 0; }
+
+    .stat-value {
+      display: block;
+      color: var(--strong);
+      font-size: 29px;
+      font-weight: 700;
+      letter-spacing: -.03em;
+    }
+
+    .stat-label {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .split-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(260px, .9fr);
+      gap: 42px;
+      align-items: start;
+    }
+
+    .rule-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .rule-list li {
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .rule-list li:last-child { border-bottom: 1px solid var(--line); }
+
+    .rule-list strong {
+      display: block;
+      color: var(--strong);
+      font-size: 14px;
+    }
+
+    .rule-list span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .repo-tree {
+      margin: 0;
+      padding: 20px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #080808;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .repo-table,
+    .data-table,
+    .metric-table,
+    .experiment-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .repo-table th,
+    .repo-table td,
+    .data-table th,
+    .data-table td,
+    .metric-table th,
+    .metric-table td,
+    .experiment-table th,
+    .experiment-table td {
+      padding: 10px 11px;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .repo-table th,
+    .data-table th,
+    .metric-table th,
+    .experiment-table th {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .repo-table td:first-child,
+    .metric-table td:first-child {
+      color: var(--strong);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      white-space: nowrap;
+    }
+
+    .repo-table td,
+    .data-table td,
+    .metric-table td { color: var(--muted); }
+
+    .repo-table td:last-child,
+    .data-table td:last-child,
+    .metric-table td:last-child { color: var(--fg); }
+
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 20px 0 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar {
+      height: 25px;
+      border: 1px solid var(--line-strong);
+      background: #050505;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: #777;
+    }
+
+    .bar-fill-solid { height: 100%; background: #ddd; }
+
+    .bar-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend-mark {
+      display: inline-block;
+      width: 18px;
+      height: 10px;
+      margin-right: 5px;
+      border: 1px solid var(--line-strong);
+      vertical-align: -1px;
+    }
+
+    .legend-mark.hatch {
+      background: #777;
+    }
+
+    .legend-mark.solid { background: #ddd; }
+
+    .callout {
+      margin: 25px 0 0;
+      padding: 16px 18px;
+      border-left: 3px solid var(--strong);
+      background: var(--surface);
+    }
+
+    .callout p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .callout strong { color: var(--strong); }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 25px;
+      align-items: start;
+    }
+
+    .architecture-text {
+      padding-top: 8px;
+    }
+
+    .architecture-text dl { margin: 0; }
+
+    .architecture-text dt {
+      margin-top: 15px;
+      color: var(--strong);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .architecture-text dd {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .control-block {
+      margin: 23px 0 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: #080808;
+    }
+
+    .control-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 13px;
+    }
+
+    .control-row label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input[type="range"] {
+      width: min(100%, 360px);
+      accent-color: var(--strong);
+    }
+
+    .score-readout {
+      margin-top: 12px;
+      color: var(--strong);
+      font-size: 14px;
+    }
+
+    .score-explanation {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 25px;
+      align-items: start;
+    }
+
+    .step-buttons {
+      display: grid;
+      gap: 3px;
+    }
+
+    .step-buttons button {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 8px;
+      width: 100%;
+      color: var(--muted);
+      border-color: var(--line);
+    }
+
+    .step-buttons button.active {
+      color: var(--strong);
+      border-color: var(--strong);
+      background: var(--surface);
+    }
+
+    .step-index { color: inherit; }
+
+    .step-detail {
+      min-height: 220px;
+      padding: 25px;
+      border: 1px solid var(--line);
+      background: #080808;
+    }
+
+    .step-detail h3 { font-size: 27px; }
+
+    .step-detail p {
+      max-width: 680px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .artifact-line {
+      margin-top: 25px;
+      padding-top: 13px;
+      border-top: 1px solid var(--line);
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .artifact-line strong { color: var(--muted); }
+
+    .chart-wrap {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .chart-wrap svg { min-width: 760px; }
+
+    .chart-note {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 17px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .line-key {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .line-key i {
+      display: inline-block;
+      width: 23px;
+      border-top: 2px solid var(--strong);
+    }
+
+    .line-key i.dashed { border-top-style: dashed; border-top-color: var(--muted); }
+    .line-key i.dotted { border-top-style: dotted; border-top-color: var(--dim); }
+
+    .experiment-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 20px 0 0;
+    }
+
+    .experiment-selector button {
+      color: var(--muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .experiment-selector button.active {
+      color: var(--bg);
+      background: var(--strong);
+      border-color: var(--strong);
+    }
+
+    .experiment-reading {
+      min-height: 128px;
+      margin: 16px 0 28px;
+      padding: 19px;
+      border-left: 2px solid var(--strong);
+      background: var(--surface);
+    }
+
+    .experiment-reading h3 { margin-bottom: 5px; }
+    .experiment-reading p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
+    .experiment-reading .status { color: var(--strong); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+
+    .experiment-table-wrap {
+      max-height: 525px;
+      overflow: auto;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .experiment-table { min-width: 900px; }
+    .experiment-table td { color: var(--muted); }
+    .experiment-table td:first-child { color: var(--strong); font-family: ui-monospace, Consolas, monospace; }
+    .experiment-table td:nth-child(2) { color: var(--fg); }
+    .experiment-table .pass { color: var(--strong); }
+    .experiment-table .fail { color: var(--muted); }
+
+    .metric-highlight {
+      display: inline-block;
+      color: var(--strong);
+      font-weight: 700;
+    }
+
+    .comparison-figure {
+      margin: 25px 0 0;
+      padding: 21px;
+      border: 1px solid var(--line);
+      background: #080808;
+    }
+
+    .two-tables {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 30px;
+      margin-top: 30px;
+    }
+
+    .two-tables h3 { margin-bottom: 12px; }
+
+    .findings-list {
+      display: grid;
+      gap: 0;
+      margin: 28px 0 0;
+    }
+
+    .finding {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 24px;
+      padding: 17px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .finding:last-child { border-bottom: 1px solid var(--line); }
+
+    .finding .label {
+      color: var(--strong);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .finding p { margin: 0; color: var(--muted); font-size: 14px; }
+    .finding strong { color: var(--strong); }
+
+    .warning {
+      margin: 26px 0 0;
+      padding: 18px;
+      border: 1px dashed var(--line-strong);
+      color: var(--muted);
+      background: #080808;
+      font-size: 14px;
+    }
+
+    .warning strong { color: var(--strong); }
+
+    .reference-list {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0 34px;
+      margin: 27px 0 0;
+    }
+
+    .reference-list div {
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .reference-list dt {
+      color: var(--strong);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .reference-list dd {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .footer-note {
+      margin-top: 44px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      :root { --sidebar-w: 188px; }
+      section { padding-left: 38px; padding-right: 38px; }
+      .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stat-strip > div:nth-child(2) { border-right: 0; }
+      .stat-strip > div:nth-child(3) { padding-left: 0; border-top: 1px solid var(--line); }
+      .stat-strip > div:nth-child(4) { border-top: 1px solid var(--line); }
+      .architecture, .two-tables, .split-layout { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 650px) {
+      :root { --sidebar-w: 0px; }
+      .sidebar {
+        position: sticky;
+        top: 0;
+        width: 100%;
+        height: auto;
+        max-height: none;
+        padding: 10px 14px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .rail-title { display: inline-block; margin: 0 10px 0 0; font-size: 11px; }
+      .rail-subtitle { display: none; }
+      .section-nav {
+        display: flex;
+        overflow-x: auto;
+        gap: 2px;
+        padding-bottom: 2px;
+      }
+      .section-nav a {
+        min-width: max-content;
+        grid-template-columns: 23px 1fr;
+        padding: 6px 8px;
+        border-left: 0;
+        border-bottom: 2px solid transparent;
+        font-size: 11px;
+      }
+      .section-nav a.active { border-bottom-color: var(--strong); }
+      .rail-footer { display: none; }
+      main { margin-left: 0; }
+      section { min-height: auto; padding: 54px 19px 70px; }
+      h1 { font-size: clamp(39px, 13vw, 64px); }
+      .lead { font-size: 19px; }
+      .hero-figure, .figure, .comparison-figure { padding: 11px; }
+      .stat-strip { grid-template-columns: 1fr 1fr; }
+      .stat-value { font-size: 23px; }
+      .stepper { grid-template-columns: 1fr; }
+      .step-buttons { grid-template-columns: repeat(3, 1fr); }
+      .step-buttons button { grid-template-columns: 1fr; min-height: 68px; padding: 7px; }
+      .step-buttons button span:last-child { font-size: 11px; }
+      .finding { grid-template-columns: 1fr; gap: 5px; }
+      .reference-list { grid-template-columns: 1fr; }
+      .repo-table, .data-table, .metric-table { font-size: 12px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Explainer sections">
+      <p class="rail-title">Kidney-stone CNN</p>
+      <p class="rail-subtitle">A visual guide to the repository, experiments, evidence, and limits.</p>
+      <nav class="section-nav">
+        <a href="#overview"><span class="section-number">01</span><span>One view</span></a>
+        <a href="#repository"><span class="section-number">02</span><span>Repository</span></a>
+        <a href="#data"><span class="section-number">03</span><span>Dataset</span></a>
+        <a href="#model"><span class="section-number">04</span><span>Model</span></a>
+        <a href="#protocol"><span class="section-number">05</span><span>Evaluation</span></a>
+        <a href="#experiments"><span class="section-number">06</span><span>Experiments</span></a>
+        <a href="#results"><span class="section-number">07</span><span>Metrics</span></a>
+        <a href="#findings"><span class="section-number">08</span><span>Findings</span></a>
+        <a href="#inference"><span class="section-number">09</span><span>Inference</span></a>
+        <a href="#limits"><span class="section-number">10</span><span>Limits</span></a>
+        <a href="#reference"><span class="section-number">11</span><span>Reference</span></a>
+      </nav>
+      <p class="rail-footer">Offline explainer<br>Development research only</p>
+    </aside>
+
+    <main>
+      <section id="overview" aria-labelledby="overview-title">
+        <div class="eyebrow">Research explainer / development-only evidence</div>
+        <h1 id="overview-title">How a kidney-stone CNN was built, tested, and judged.</h1>
+        <p class="lead">The project turns related CT slices into one patient-level score, measures that score without patient leakage, and keeps a candidate only when the evidence survives several checks.</p>
+
+        <figure class="hero-figure" aria-labelledby="hero-caption">
+          <svg viewBox="0 0 1120 315" role="img" aria-label="Flow from CT slices through patient grouping, five-fold training, the CNN, patient-level scoring, and evidence gates. The sealed test remains outside the tuning loop.">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#fff"></path>
+              </marker>
+              <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                <rect width="8" height="8" fill="#151515"></rect>
+                <line x1="0" y1="0" x2="0" y2="8" stroke="#777" stroke-width="2"></line>
+              </pattern>
+            </defs>
+            <text x="20" y="25" class="svg-small">THE PROJECT IN ONE VIEW</text>
+            <rect x="20" y="62" width="150" height="108" rx="3" class="svg-box"></rect>
+            <text x="95" y="96" text-anchor="middle" class="svg-label">CT slices</text>
+            <text x="95" y="121" text-anchor="middle" class="svg-small">3,364 originals</text>
+            <text x="95" y="142" text-anchor="middle" class="svg-small">201 patients</text>
+
+            <line x1="170" y1="116" x2="221" y2="116" class="svg-line" marker-end="url(#arrow)"></line>
+            <rect x="221" y="62" width="160" height="108" rx="3" class="svg-box"></rect>
+            <text x="301" y="96" text-anchor="middle" class="svg-label">Patient split</text>
+            <text x="301" y="121" text-anchor="middle" class="svg-small">161 development</text>
+            <text x="301" y="142" text-anchor="middle" class="svg-small">40 sealed</text>
+
+            <line x1="381" y1="116" x2="432" y2="116" class="svg-line" marker-end="url(#arrow)"></line>
+            <rect x="432" y="62" width="160" height="108" rx="3" class="svg-box"></rect>
+            <text x="512" y="96" text-anchor="middle" class="svg-label">Five folds</text>
+            <text x="512" y="121" text-anchor="middle" class="svg-small">train on four</text>
+            <text x="512" y="142" text-anchor="middle" class="svg-small">validate on one</text>
+
+            <line x1="592" y1="116" x2="643" y2="116" class="svg-line" marker-end="url(#arrow)"></line>
+            <rect x="643" y="62" width="160" height="108" rx="3" class="svg-box"></rect>
+            <text x="723" y="96" text-anchor="middle" class="svg-label">CNN</text>
+            <text x="723" y="121" text-anchor="middle" class="svg-small">slice probability</text>
+            <text x="723" y="142" text-anchor="middle" class="svg-small">original slices only</text>
+
+            <line x1="803" y1="116" x2="854" y2="116" class="svg-line" marker-end="url(#arrow)"></line>
+            <rect x="854" y="62" width="246" height="108" rx="3" class="svg-box-strong"></rect>
+            <text x="977" y="96" text-anchor="middle" class="svg-label">Patient score</text>
+            <text x="977" y="121" text-anchor="middle" class="svg-small">mean slice probability</text>
+            <text x="977" y="142" text-anchor="middle" class="svg-small">E023 AUC 0.853414</text>
+
+            <line x1="512" y1="170" x2="512" y2="230" class="svg-line-dash" marker-end="url(#arrow)"></line>
+            <rect x="323" y="230" width="378" height="60" rx="3" class="svg-box"></rect>
+            <text x="512" y="255" text-anchor="middle" class="svg-label">Evidence gates</text>
+            <text x="512" y="276" text-anchor="middle" class="svg-small">integrity · OOF · transfer · correctness</text>
+
+            <line x1="977" y1="170" x2="977" y2="230" class="svg-line-dash"></line>
+            <text x="977" y="220" text-anchor="middle" class="svg-small">sealed test excluded</text>
+          </svg>
+          <figcaption id="hero-caption" class="caption">The important unit is the patient. Slices supply evidence; they are not treated as independent patients.</figcaption>
+        </figure>
+
+        <div class="stat-strip" aria-label="Project headline figures">
+          <div><span class="stat-value">0.853414</span><span class="stat-label">E023 patient-level OOF ROC-AUC</span></div>
+          <div><span class="stat-value">+0.049274</span><span class="stat-label">improvement over E000 baseline</span></div>
+          <div><span class="stat-value">161</span><span class="stat-label">development patients</span></div>
+          <div><span class="stat-value">47</span><span class="stat-label">correctness tests passed</span></div>
+        </div>
+      </section>
+
+      <section id="repository" aria-labelledby="repository-title">
+        <div class="eyebrow">02 / The base repository</div>
+        <h2 id="repository-title">The repository is a small, staged research pipeline.</h2>
+        <p class="section-intro">The clean base checkout contains the original implementation. The isolated worktree holds the research state and experiments, so the source project remains recoverable.</p>
+
+        <div class="split-layout">
+          <pre class="repo-tree" aria-label="Repository tree">kidney stone detection/
+├── train.py                 command-line entry point
+├── configs/default.yaml     default experiment settings
+├── src/
+│   ├── data.py              manifest, preprocessing, augmentation
+│   ├── splits.py            patient-wise frozen splits
+│   ├── model.py             kidney_cnn_v1 architecture
+│   ├── trainer.py           fold training and checkpoints
+│   ├── evaluate.py          metrics, plots, threshold, bundle
+│   └── utils.py             seeds, hashes, metadata, config
+├── tests/                   pipeline and formula checks
+├── splits/                  frozen outer split and CV folds
+└── runs/                    immutable run artifacts</pre>
+
+          <ul class="rule-list">
+            <li><strong><code>prepare</code></strong><span>Scans image paths, extracts patient/label metadata, writes the manifest, and freezes the patient split.</span></li>
+            <li><strong><code>smoke</code></strong><span>Checks model construction, output shapes, checkpoint save/reload, and metric formulas on synthetic data.</span></li>
+            <li><strong><code>cv</code></strong><span>Trains five patient-wise folds, saves the best checkpoint for each, then builds out-of-fold predictions.</span></li>
+            <li><strong><code>finalize</code></strong><span>Exists in the original CLI, but is not part of the accepted E023 research result. It is prohibited here because the sealed test is permanently excluded from tuning.</span></li>
+          </ul>
+        </div>
+
+        <table class="repo-table" style="margin-top: 34px;">
+          <thead><tr><th>Component</th><th>Responsibility</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td>data.py</td><td>Parses class, original/derivative status, patient ID, source image ID, and site tag; creates train/validation datasets.</td><td>Patient identity and original-only evaluation are the foundation of the evidence.</td></tr>
+            <tr><td>splits.py</td><td>Enforces 161 development patients, 40 sealed patients, five unique CV folds, and no duplicate source/hash crossing a fold boundary.</td><td>Prevents patient or duplicate-image leakage.</td></tr>
+            <tr><td>model.py</td><td>Builds the four-block <code>kidney_cnn_v1</code> CNN and two-class softmax output.</td><td>Defines the artifact being compared across experiments.</td></tr>
+            <tr><td>trainer.py</td><td>Compiles AdamW, trains each fold, monitors validation loss, and reloads <code>best.keras</code>.</td><td>Each fold is judged at its own best validation checkpoint.</td></tr>
+            <tr><td>evaluate.py</td><td>Aggregates OOF predictions, computes ROC/PR/confusion metrics, selects Youden's J threshold, and exports plots/bundles.</td><td>Turns raw probabilities into comparable, auditable measurements.</td></tr>
+            <tr><td>tests/</td><td>Checks data parsing, split integrity, training behavior, evaluation formulas, and smoke behavior.</td><td>Separates an implementation failure from a research failure.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="data" aria-labelledby="data-title">
+        <div class="eyebrow">03 / The data</div>
+        <h2 id="data-title">The dataset has many slices, but only 201 patient units.</h2>
+        <p class="section-intro">A patient can contribute multiple CT slices. The dataset also includes supplied derivative images, but those are not independent medical examples and were excluded from the accepted model.</p>
+
+        <figure class="figure" aria-labelledby="data-caption">
+          <svg viewBox="0 0 1120 275" role="img" aria-label="Dataset structure showing original images versus derivative rows, then the patient-wise development and sealed split.">
+            <defs>
+              <pattern id="dataHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                <rect width="8" height="8" fill="#151515"></rect>
+                <line x1="0" y1="0" x2="0" y2="8" stroke="#777" stroke-width="2"></line>
+              </pattern>
+            </defs>
+            <text x="26" y="27" class="svg-small">INDEXED ROWS — schematic, not a patient-count scale</text>
+            <rect x="26" y="52" width="1068" height="36" class="svg-box"></rect>
+            <rect x="26" y="52" width="96" height="36" fill="#ddd"></rect>
+            <rect x="122" y="52" width="972" height="36" fill="url(#dataHatch)"></rect>
+            <text x="74" y="75" text-anchor="middle" class="svg-small" fill="#000">3,364 originals</text>
+            <text x="608" y="75" text-anchor="middle" class="svg-small">35,457 derivative rows — excluded</text>
+
+            <text x="26" y="137" class="svg-small">ORIGINAL PATIENT-WISE OUTER SPLIT</text>
+            <rect x="26" y="162" width="1068" height="36" class="svg-box"></rect>
+            <rect x="26" y="162" width="855" height="36" fill="#ddd"></rect>
+            <rect x="881" y="162" width="213" height="36" fill="url(#dataHatch)"></rect>
+            <line x1="881" y1="156" x2="881" y2="204" stroke="#fff" stroke-width="1"></line>
+            <text x="453" y="185" text-anchor="middle" class="svg-small" fill="#000">161 development patients / 2,796 original slices</text>
+            <text x="987" y="185" text-anchor="middle" class="svg-small">40 sealed / 568 slices</text>
+
+            <text x="26" y="240" class="svg-small">E023 uses original slices only; all scoring is grouped back to patients.</text>
+          </svg>
+          <figcaption id="data-caption" class="caption">The derivative rows are visibly numerous, but they were not allowed to inflate the effective sample size.</figcaption>
+        </figure>
+
+        <div class="split-layout" style="margin-top: 31px;">
+          <div>
+            <div class="bar-label"><span>Original images in source cohort</span><span>3,364</span></div>
+            <div class="bar"><div class="bar-fill-solid" style="width: 9.5%;"></div></div>
+            <div class="bar-legend"><span><i class="legend-mark solid"></i>original rows</span><span><i class="legend-mark hatch"></i>derivative rows are not used</span></div>
+
+            <div class="bar-label"><span>Patient-wise outer split</span><span>201 patients</span></div>
+            <div class="bar"><div class="bar-fill-solid" style="width: 80.1%;"></div></div>
+            <div class="bar-legend"><span><i class="legend-mark solid"></i>161 development</span><span><i class="legend-mark hatch"></i>40 sealed</span></div>
+          </div>
+          <div>
+            <table class="data-table">
+              <thead><tr><th>Dataset fact</th><th>Recorded value</th></tr></thead>
+              <tbody>
+                <tr><td>Original Non-Stone images</td><td>1,787</td></tr>
+                <tr><td>Original Stone images</td><td>1,577</td></tr>
+                <tr><td>Development folds</td><td>33, 33, 33, 31, 31 patients</td></tr>
+                <tr><td>E023 development labels</td><td>83 Non-Stone / 78 Stone patients</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="callout"><p><strong>Why group by patient?</strong> If slices from one patient were split across training and validation, the model could benefit from patient-specific visual cues. The frozen split assigns the patient first; only then are slices assigned to train or validation.</p></div>
+      </section>
+
+      <section id="model" aria-labelledby="model-title">
+        <div class="eyebrow">04 / The model mechanism</div>
+        <h2 id="model-title">The CNN sees slices; the study is judged on patients.</h2>
+        <p class="section-intro">The model produces a Stone probability for each original slice. Those probabilities are averaged within a patient. The patient score is then ranked against the recorded patient label.</p>
+
+        <div class="architecture">
+          <div class="architecture-text">
+            <dl>
+              <dt>Input</dt><dd>384 × 384 grayscale CT slice.</dd>
+              <dt>Feature extraction</dt><dd>Four convolutional blocks with 64, 128, 256, and 512 filters. Each block uses two convolutions, BatchNorm, ReLU, and 2×2 pooling.</dd>
+              <dt>Classification head</dt><dd>Global average pooling → Dense(192) → ReLU → Dropout(0.35) → two-class softmax.</dd>
+              <dt>Size</dt><dd>Approximately 4,788,866 total parameters; approximately 4,785,026 trainable parameters.</dd>
+              <dt>Training recipe for E023</dt><dd>AdamW, learning rate 0.0001, weight decay 0.0001, batch size 8, label smoothing 0.05, mild online augmentation, maximum 60 epochs.</dd>
+            </dl>
+          </div>
+
+          <figure class="figure" style="margin:0;" aria-labelledby="model-caption">
+            <svg viewBox="0 0 560 380" role="img" aria-label="Diagram showing several slice probabilities averaged into one patient score and compared with the locked threshold.">
+              <defs>
+                <marker id="modelArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#fff"></path>
+                </marker>
+              </defs>
+              <text x="22" y="25" class="svg-small">PATIENT-LEVEL AGGREGATION</text>
+              <g class="svg-box">
+                <rect x="22" y="54" width="100" height="42"></rect>
+                <rect x="22" y="108" width="100" height="42"></rect>
+                <rect x="22" y="162" width="100" height="42"></rect>
+                <rect x="22" y="216" width="100" height="42"></rect>
+              </g>
+              <text x="72" y="80" text-anchor="middle" class="svg-small">slice 01</text>
+              <text x="72" y="134" text-anchor="middle" class="svg-small">slice 02</text>
+              <text x="72" y="188" text-anchor="middle" class="svg-small">slice 03</text>
+              <text x="72" y="242" text-anchor="middle" class="svg-small">slice …</text>
+              <line x1="122" y1="75" x2="190" y2="142" class="svg-line" marker-end="url(#modelArrow)"></line>
+              <line x1="122" y1="129" x2="190" y2="151" class="svg-line" marker-end="url(#modelArrow)"></line>
+              <line x1="122" y1="183" x2="190" y2="160" class="svg-line" marker-end="url(#modelArrow)"></line>
+              <line x1="122" y1="237" x2="190" y2="169" class="svg-line" marker-end="url(#modelArrow)"></line>
+              <rect x="190" y="123" width="125" height="71" class="svg-box-strong"></rect>
+              <text x="252" y="151" text-anchor="middle" class="svg-label">mean</text>
+              <text x="252" y="173" text-anchor="middle" class="svg-small">one patient score</text>
+              <line x1="315" y1="158" x2="372" y2="158" class="svg-line" marker-end="url(#modelArrow)"></line>
+              <rect x="372" y="123" width="160" height="71" class="svg-box"></rect>
+              <text x="452" y="150" text-anchor="middle" class="svg-label">rank patients</text>
+              <text x="452" y="173" text-anchor="middle" class="svg-small">ROC-AUC</text>
+              <line x1="252" y1="194" x2="252" y2="291" class="svg-line-dash"></line>
+              <text x="252" y="316" text-anchor="middle" class="svg-small">Threshold is a separate</text>
+              <text x="252" y="335" text-anchor="middle" class="svg-small">decision operating point.</text>
+            </svg>
+            <figcaption id="model-caption" class="caption">Schematic: many related observations become one patient-level observation.</figcaption>
+          </figure>
+        </div>
+
+        <div class="control-block">
+          <div class="control-row">
+            <label for="scoreSlider">Explore a conceptual patient score:</label>
+            <input id="scoreSlider" type="range" min="0" max="1" step="0.001" value="0.53" aria-describedby="scoreExplanation">
+            <output id="scoreValue" for="scoreSlider">0.530</output>
+          </div>
+          <div id="scoreResult" class="score-readout" aria-live="polite">Above the locked threshold → the rule would call this patient Stone.</div>
+          <p id="scoreExplanation" class="score-explanation">The locked E023 threshold is 0.453162. This slider is a teaching example, not a new patient prediction.</p>
+          <svg viewBox="0 0 760 90" role="img" aria-label="Interactive conceptual score number line from zero to one with the E023 threshold marked.">
+            <line x1="40" y1="44" x2="720" y2="44" class="svg-line"></line>
+            <line id="thresholdMark" x1="348" y1="26" x2="348" y2="62" stroke="#aaa" stroke-width="2" stroke-dasharray="5 4"></line>
+            <line id="scoreMark" x1="400" y1="23" x2="400" y2="65" stroke="#fff" stroke-width="3"></line>
+            <text x="40" y="79" class="svg-small">0.0</text>
+            <text x="720" y="79" text-anchor="end" class="svg-small">1.0</text>
+            <text x="348" y="16" text-anchor="middle" class="svg-small">threshold</text>
+            <text id="scoreMarkLabel" x="400" y="16" text-anchor="middle" class="svg-small">score</text>
+          </svg>
+        </div>
+      </section>
+
+      <section id="protocol" aria-labelledby="protocol-title">
+        <div class="eyebrow">05 / The evaluation protocol</div>
+        <h2 id="protocol-title">Each result passed through the same evidence path.</h2>
+        <p class="section-intro">The stages below are the project’s repeatable route from raw data to an accepted development candidate. Select a stage to see what it contributes.</p>
+
+        <div class="stepper">
+          <div class="step-buttons" role="tablist" aria-label="Evaluation stages">
+            <button type="button" class="active" data-step="0" role="tab" aria-selected="true"><span class="step-index">01</span><span>Prepare</span></button>
+            <button type="button" data-step="1" role="tab" aria-selected="false"><span class="step-index">02</span><span>Smoke</span></button>
+            <button type="button" data-step="2" role="tab" aria-selected="false"><span class="step-index">03</span><span>Five folds</span></button>
+            <button type="button" data-step="3" role="tab" aria-selected="false"><span class="step-index">04</span><span>OOF score</span></button>
+            <button type="button" data-step="4" role="tab" aria-selected="false"><span class="step-index">05</span><span>Transfer</span></button>
+            <button type="button" data-step="5" role="tab" aria-selected="false"><span class="step-index">06</span><span>Verify</span></button>
+          </div>
+          <div class="step-detail" id="stepDetail" role="tabpanel" aria-live="polite">
+            <div class="eyebrow">Stage 01</div>
+            <h3>Prepare the evidence boundary.</h3>
+            <p>Scan the source tree, parse patient and label metadata, write the manifest, then freeze the 161-development / 40-sealed patient split and five development folds.</p>
+            <div class="artifact-line"><strong>Key artifacts:</strong> <code>data/manifest.csv</code> · <code>splits/outer_split.csv</code> · <code>splits/cv_folds.csv</code></div>
+          </div>
+        </div>
+
+        <div class="callout"><p><strong>Primary metric:</strong> mean slice probability per patient, followed by patient-level ROC-AUC. Slice-level ROC-AUC is retained as a diagnostic metric, not the ranking target.</p></div>
+      </section>
+
+      <section id="experiments" aria-labelledby="experiments-title">
+        <div class="eyebrow">06 / The research ratchet</div>
+        <h2 id="experiments-title">Twenty-seven recorded experiments narrowed the search.</h2>
+        <p class="section-intro">The highest out-of-fold number was not automatically accepted. A candidate had to preserve the score regime, pass integrity checks, and remain reproducible. Select a milestone, then open the ledger for every recorded run.</p>
+
+        <figure class="figure" aria-labelledby="progress-caption">
+          <div class="chart-wrap">
+            <svg viewBox="0 0 1050 350" role="img" aria-label="Milestone chart showing development patient-level ROC-AUC across baseline, candidates, near-misses, and the accepted E023 candidate.">
+              <line x1="72" y1="285" x2="1010" y2="285" stroke="#777" stroke-width="1"></line>
+              <line x1="72" y1="65" x2="72" y2="285" stroke="#777" stroke-width="1"></line>
+              <line x1="72" y1="175" x2="1010" y2="175" stroke="#333" stroke-width="1"></line>
+              <line x1="72" y1="120" x2="1010" y2="120" stroke="#333" stroke-width="1"></line>
+              <line x1="72" y1="230" x2="1010" y2="230" stroke="#333" stroke-width="1"></line>
+              <text x="62" y="289" text-anchor="end" class="svg-small">0.78</text>
+              <text x="62" y="234" text-anchor="end" class="svg-small">0.805</text>
+              <text x="62" y="179" text-anchor="end" class="svg-small">0.83</text>
+              <text x="62" y="124" text-anchor="end" class="svg-small">0.855</text>
+              <text x="62" y="69" text-anchor="end" class="svg-small">0.88</text>
+              <text x="72" y="45" class="svg-small">patient-level OOF ROC-AUC; higher is better</text>
+
+              <polyline points="125,232 290,129 455,91 620,166 785,131 950,125" fill="none" stroke="#fff" stroke-width="3"></polyline>
+              <line x1="72" y1="232" x2="1010" y2="232" stroke="#aaa" stroke-width="1.5" stroke-dasharray="7 6"></line>
+              <text x="1010" y="225" text-anchor="end" class="svg-small">E000 baseline 0.804140</text>
+
+              <circle cx="125" cy="232" r="6" fill="#000" stroke="#fff" stroke-width="2"></circle>
+              <circle cx="290" cy="129" r="6" fill="#000" stroke="#fff" stroke-width="2"></circle>
+              <circle cx="455" cy="91" r="6" fill="#000" stroke="#aaa" stroke-width="2"></circle>
+              <circle cx="620" cy="166" r="6" fill="#000" stroke="#fff" stroke-width="2"></circle>
+              <circle cx="785" cy="131" r="8" fill="#fff" stroke="#fff" stroke-width="2"></circle>
+              <circle cx="950" cy="125" r="6" fill="#000" stroke="#aaa" stroke-width="2"></circle>
+
+              <text x="125" y="313" text-anchor="middle" class="svg-small">E000</text>
+              <text x="290" y="313" text-anchor="middle" class="svg-small">E004</text>
+              <text x="455" y="313" text-anchor="middle" class="svg-small">E015</text>
+              <text x="620" y="313" text-anchor="middle" class="svg-small">E019</text>
+              <text x="785" y="313" text-anchor="middle" class="svg-small">E023</text>
+              <text x="950" y="313" text-anchor="middle" class="svg-small">E024</text>
+              <text x="785" y="113" text-anchor="middle" class="svg-small">accepted</text>
+            </svg>
+          </div>
+          <div class="chart-note">
+            <span class="line-key"><i></i>recorded milestone score</span>
+            <span class="line-key"><i class="dashed"></i>baseline reference</span>
+            <span class="line-key"><i class="dotted"></i>higher OOF score can still be rejected</span>
+          </div>
+          <figcaption id="progress-caption" class="caption">E015 and E024 had higher OOF AUC than E023 but failed the transfer guard. E023 is the accepted development candidate because it passed the complete contract.</figcaption>
+        </figure>
+
+        <div class="experiment-selector" aria-label="Experiment milestone selector">
+          <button type="button" class="active" data-exp="E000">E000</button>
+          <button type="button" data-exp="E004">E004</button>
+          <button type="button" data-exp="E005">E005</button>
+          <button type="button" data-exp="E009">E009</button>
+          <button type="button" data-exp="E015">E015</button>
+          <button type="button" data-exp="E019">E019</button>
+          <button type="button" data-exp="E021">E021</button>
+          <button type="button" data-exp="E023">E023</button>
+          <button type="button" data-exp="E024">E024</button>
+          <button type="button" data-exp="E026">E026</button>
+        </div>
+        <div class="experiment-reading" id="experimentReading" aria-live="polite">
+          <div class="status">champion reference</div>
+          <h3>E000 — full-dataset shuffle baseline</h3>
+          <p>Patient OOF ROC-AUC 0.804140. Full-dataset shuffling fixed the earlier class-order bias, so E000 became the first trustworthy research reference.</p>
+        </div>
+
+        <details>
+          <summary style="cursor:pointer; color:#fff;">Show all 27 recorded experiments</summary>
+          <div class="experiment-table-wrap" style="margin-top:15px;">
+            <table class="experiment-table">
+              <thead><tr><th>ID</th><th>Status</th><th>Patient metric</th><th>Slice metric</th><th>KS</th><th>Threshold delta</th><th>What the run established</th></tr></thead>
+              <tbody id="experimentRows"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <section id="results" aria-labelledby="results-title">
+        <div class="eyebrow">07 / The current metrics</div>
+        <h2 id="results-title">E023 is good development evidence, with a clear boundary.</h2>
+        <p class="section-intro">The current champion is an equal-mean ensemble of the five patient-AUC-selected fold-best checkpoints. These figures come from the complete E023 development run and its unchanged transfer check.</p>
+
+        <div class="stat-strip">
+          <div><span class="stat-value">0.853414</span><span class="stat-label">patient OOF ROC-AUC</span></div>
+          <div><span class="stat-value">0.814036</span><span class="stat-label">slice OOF ROC-AUC</span></div>
+          <div><span class="stat-value">0.914461</span><span class="stat-label">mean fold patient AUC</span></div>
+          <div><span class="stat-value">0.863971</span><span class="stat-label">weakest fold patient AUC</span></div>
+        </div>
+
+        <div class="comparison-figure">
+          <svg viewBox="0 0 1050 250" role="img" aria-label="Comparison bars for baseline and E023 patient and slice ROC-AUC.">
+            <text x="20" y="26" class="svg-small">BASELINE → E023</text>
+            <text x="20" y="77" class="svg-small">Patient OOF ROC-AUC</text>
+            <rect x="220" y="56" width="700" height="28" class="svg-box"></rect>
+            <rect x="220" y="56" width="563" height="28" fill="#777"></rect>
+            <line x1="783" y1="48" x2="783" y2="92" stroke="#aaa" stroke-width="1.5" stroke-dasharray="5 4"></line>
+            <text x="792" y="76" class="svg-small">E000 0.804140</text>
+            <rect x="220" y="56" width="597" height="28" fill="#fff"></rect>
+            <text x="828" y="76" class="svg-small" fill="#000">E023 0.853414</text>
+
+            <text x="20" y="153" class="svg-small">Slice OOF ROC-AUC</text>
+            <rect x="220" y="132" width="700" height="28" class="svg-box"></rect>
+            <rect x="220" y="132" width="556" height="28" fill="#777"></rect>
+            <line x1="776" y1="124" x2="776" y2="168" stroke="#aaa" stroke-width="1.5" stroke-dasharray="5 4"></line>
+            <text x="784" y="152" class="svg-small">E000 0.796691</text>
+            <rect x="220" y="132" width="568" height="28" fill="#fff"></rect>
+            <text x="798" y="152" class="svg-small" fill="#000">E023 0.814036</text>
+
+            <text x="220" y="207" class="svg-small">0.75</text>
+            <text x="570" y="207" text-anchor="middle" class="svg-small">0.80</text>
+            <text x="920" y="207" text-anchor="end" class="svg-small">0.85+</text>
+            <text x="220" y="232" class="svg-small">The bar is a visual comparison; the exact values are printed above.</text>
+          </svg>
+        </div>
+
+        <div class="two-tables">
+          <div>
+            <h3>Patient-level locked-threshold metrics</h3>
+            <table class="metric-table">
+              <tbody>
+                <tr><td>Threshold</td><td>0.4531617227</td></tr>
+                <tr><td>PR-AUC</td><td>0.8605877001</td></tr>
+                <tr><td>Sensitivity / recall</td><td>0.7179487179</td></tr>
+                <tr><td>Specificity</td><td>0.8915662651</td></tr>
+                <tr><td>Precision</td><td>0.8615384615</td></tr>
+                <tr><td>F1 score</td><td>0.7832167832</td></tr>
+                <tr><td>Balanced accuracy</td><td>0.8047574915</td></tr>
+                <tr><td>Confusion matrix</td><td>TN 74 · FP 9 · FN 22 · TP 56</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3>Transfer guard</h3>
+            <table class="metric-table">
+              <tbody>
+                <tr><td>Probability standard deviation</td><td>0.3730257534 — pass</td></tr>
+                <tr><td>KS distance vs OOF</td><td>0.1304347826 — pass</td></tr>
+                <tr><td>OOF positive rate</td><td>0.4037267081</td></tr>
+                <tr><td>Development positive rate</td><td>0.4658385093</td></tr>
+                <tr><td>Rate difference</td><td>0.0621118012 — pass</td></tr>
+                <tr><td>Gate requirements</td><td>std ≥ 0.10 · KS &lt; 0.15 · delta ≤ 0.10</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="two-tables">
+          <div>
+            <h3>Fold-by-fold patient AUC</h3>
+            <table class="metric-table">
+              <thead><tr><th>Fold</th><th>Patients</th><th>AUC</th></tr></thead>
+              <tbody>
+                <tr><td>0</td><td>33</td><td>0.937500</td></tr>
+                <tr><td>1</td><td>33</td><td>0.937500</td></tr>
+                <tr><td>2</td><td>33</td><td>0.863971</td></tr>
+                <tr><td>3</td><td>31</td><td>0.912500</td></tr>
+                <tr><td>4</td><td>31</td><td>0.920833</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3>Development site breakdown</h3>
+            <table class="metric-table">
+              <thead><tr><th>Site</th><th>Patients</th><th>AUC</th></tr></thead>
+              <tbody>
+                <tr><td>FA</td><td>42</td><td>0.782716</td></tr>
+                <tr><td>ME</td><td>20</td><td>0.812500</td></tr>
+                <tr><td>RA</td><td>99</td><td>0.869008</td></tr>
+              </tbody>
+            </table>
+            <p class="caption">ME has only 20 patients, so its estimate is less stable.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="findings" aria-labelledby="findings-title">
+        <div class="eyebrow">08 / What the experiments taught us</div>
+        <h2 id="findings-title">The biggest gains came from fixing evidence quality.</h2>
+        <p class="section-intro">The research did not simply search for a larger score. It found which measurements could be trusted, which training signals were misleading, and where the final training protocol stopped transferring.</p>
+
+        <div class="findings-list">
+          <div class="finding"><div class="label">Data order</div><p>The old 1,024-item shuffle buffer interacted badly with a class-sorted manifest. Batches became class-biased and folds collapsed. Full-dataset shuffling corrected the mechanism and produced E000.</p></div>
+          <div class="finding"><div class="label">Derivatives</div><p>Training with supplied derivatives caused memorization and validation collapse. The accepted configuration keeps <strong>derivatives disabled</strong>.</p></div>
+          <div class="finding"><div class="label">Patient unit</div><p>Negative patients average 18.89 slices and positive patients 15.74. The top 10% of patients contribute 28.25% of slices. Slice count is therefore not the same as independent sample count.</p></div>
+          <div class="finding"><div class="label">Checkpointing</div><p>Seed-44 diagnostics showed that selecting checkpoints by patient validation AUC rescued weak folds. The aligned full seed-43 run E023 then reached a strong and stable five-fold result.</p></div>
+          <div class="finding"><div class="label">Transfer</div><p>Several candidates had higher OOF AUC but their score distributions changed outside the held-out folds. E005 and E006 collapsed in opposite directions; E007/E008 fixed spread but not distribution shape; E015/E020/E024 were transfer near-misses.</p></div>
+          <div class="finding"><div class="label">External data</div><p>KidneyStoneTR was quarantined because its archive lacked a verifiable patient-to-slice map and its advertised holdout contained duplicate images across directories. It was not used to inflate training or validation.</p></div>
+        </div>
+
+        <div class="warning"><strong>Correct interpretation:</strong> E023 is a verified development candidate under the project’s gates. It is not a medical-grade model, a clinical validation study, or evidence that the score will transfer to another hospital.</div>
+      </section>
+
+      <section id="inference" aria-labelledby="inference-title">
+        <div class="eyebrow">09 / Inference</div>
+        <h2 id="inference-title">Inference requires the patient grouping to survive the whole path.</h2>
+        <p class="section-intro">A single slice can receive a probability, but the project’s primary output is one score per patient. The accepted E023 evidence uses the five fold-best checkpoints as an equal-mean ensemble.</p>
+
+        <figure class="figure" aria-labelledby="inference-caption">
+          <svg viewBox="0 0 1120 250" role="img" aria-label="Inference workflow from a patient's CT slices through five fold-best checkpoints, slice probabilities, patient mean, and a thresholded research output.">
+            <defs>
+              <marker id="infArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#fff"></path>
+              </marker>
+            </defs>
+            <text x="25" y="27" class="svg-small">E023 INFERENCE CONCEPT</text>
+            <rect x="25" y="71" width="178" height="93" class="svg-box"></rect>
+            <text x="114" y="104" text-anchor="middle" class="svg-label">Patient folder</text>
+            <text x="114" y="128" text-anchor="middle" class="svg-small">original CT slices</text>
+            <text x="114" y="148" text-anchor="middle" class="svg-small">patient ID required</text>
+            <line x1="203" y1="117" x2="265" y2="117" class="svg-line" marker-end="url(#infArrow)"></line>
+            <rect x="265" y="71" width="198" height="93" class="svg-box"></rect>
+            <text x="364" y="104" text-anchor="middle" class="svg-label">Five checkpoints</text>
+            <text x="364" y="128" text-anchor="middle" class="svg-small">equal mean ensemble</text>
+            <text x="364" y="148" text-anchor="middle" class="svg-small">E023 fold-best models</text>
+            <line x1="463" y1="117" x2="525" y2="117" class="svg-line" marker-end="url(#infArrow)"></line>
+            <rect x="525" y="71" width="155" height="93" class="svg-box"></rect>
+            <text x="602" y="104" text-anchor="middle" class="svg-label">Slice scores</text>
+            <text x="602" y="128" text-anchor="middle" class="svg-small">one probability</text>
+            <text x="602" y="148" text-anchor="middle" class="svg-small">per slice</text>
+            <line x1="680" y1="117" x2="742" y2="117" class="svg-line" marker-end="url(#infArrow)"></line>
+            <rect x="742" y="71" width="155" height="93" class="svg-box-strong"></rect>
+            <text x="819" y="104" text-anchor="middle" class="svg-label">Patient mean</text>
+            <text x="819" y="128" text-anchor="middle" class="svg-small">one score</text>
+            <text x="819" y="148" text-anchor="middle" class="svg-small">0.0 to 1.0</text>
+            <line x1="897" y1="117" x2="959" y2="117" class="svg-line" marker-end="url(#infArrow)"></line>
+            <rect x="959" y="71" width="136" height="93" class="svg-box"></rect>
+            <text x="1027" y="104" text-anchor="middle" class="svg-label">Research</text>
+            <text x="1027" y="128" text-anchor="middle" class="svg-small">threshold</text>
+            <text x="1027" y="148" text-anchor="middle" class="svg-small">0.453162</text>
+            <text x="25" y="211" class="svg-small">A patient-level score cannot be reconstructed safely from an ungrouped single slice.</text>
+          </svg>
+          <figcaption id="inference-caption" class="caption">The inference path mirrors the evaluation path: preserve original preprocessing, model provenance, patient grouping, and the locked threshold.</figcaption>
+        </figure>
+
+        <div class="two-tables">
+          <div>
+            <h3>What an inference wrapper must do</h3>
+            <ul class="rule-list">
+              <li><strong>Match preprocessing</strong><span>384×384 grayscale, with the same normalization used by the training pipeline.</span></li>
+              <li><strong>Load all five E023 checkpoints</strong><span>Average their slice probabilities before the patient aggregation.</span></li>
+              <li><strong>Keep patient IDs</strong><span>Group all slices belonging to a patient before returning the main result.</span></li>
+              <li><strong>Report provenance</strong><span>Record model paths, threshold, configuration, and the research-only status.</span></li>
+            </ul>
+          </div>
+          <div>
+            <h3>What is not available</h3>
+            <ul class="rule-list">
+              <li><strong>No accepted sealed-test score</strong><span>The sealed test is permanently excluded from tuning and must not be reopened.</span></li>
+              <li><strong>No clinical deployment claim</strong><span>The project has no prospective study, external hospital cohort, or medical certification.</span></li>
+              <li><strong>No safe single-image conclusion</strong><span>The primary metric and threshold are patient-level.</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="limits" aria-labelledby="limits-title">
+        <div class="eyebrow">10 / Limits and next goals</div>
+        <h2 id="limits-title">The bottleneck is trustworthy generalization, not just model size.</h2>
+        <p class="section-intro">The current candidate has cleared the documented development bar. The next improvement must come from stronger evidence and better transfer, not from reopening a protected test set.</p>
+
+        <div class="two-tables">
+          <div>
+            <h3>What limits the current conclusion</h3>
+            <table class="metric-table">
+              <tbody>
+                <tr><td>Small patient count</td><td>201 patients total; 161 development patients.</td></tr>
+                <tr><td>Related slices</td><td>3,364 original images are not 3,364 independent cases.</td></tr>
+                <tr><td>Uneven contribution</td><td>Patients contribute different numbers of slices; the largest 10% contribute 28.25% of slices.</td></tr>
+                <tr><td>Site confounding</td><td>Development AUC varies by FA, ME, and RA; site-only baseline is about 0.562.</td></tr>
+                <tr><td>External cohort gap</td><td>No verified independent patient-mapped cohort is available in the current study.</td></tr>
+                <tr><td>Sealed boundary</td><td>The 40-patient sealed set cannot be used for additional tuning.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3>Responsible next steps</h3>
+            <ol class="rule-list">
+              <li><strong>Obtain patient-mapped external data</strong><span>Require acquisition, label, and provenance documentation before treating it as independent evidence.</span></li>
+              <li><strong>Investigate transfer stability</strong><span>Study the BatchNorm/final-training score-regime mismatch without touching the sealed set.</span></li>
+              <li><strong>Improve inference packaging</strong><span>Make patient grouping, five-checkpoint loading, thresholding, and provenance explicit.</span></li>
+              <li><strong>Report uncertainty</strong><span>Use patient-level confidence intervals and subgroup counts when an independent cohort exists.</span></li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="callout"><p><strong>Good enough means “good enough for this research stage.”</strong> E023 is repeat-confirmed, transfer-safe within the development guard, reproducible, and verified. That is a meaningful project result; it is not the end of clinical validation.</p></div>
+      </section>
+
+      <section id="reference" aria-labelledby="reference-title">
+        <div class="eyebrow">11 / Compact reference</div>
+        <h2 id="reference-title">The evidence is traceable to files, runs, and hashes.</h2>
+        <p class="section-intro">Use this section when moving from the visual story back to the actual project artifacts.</p>
+
+        <dl class="reference-list">
+          <div><dt>Current candidate</dt><dd><code>E023</code> — equal mean of five seed-43 patient-AUC-selected fold-best checkpoints.</dd></div>
+          <div><dt>Best run</dt><dd><code>runs/20260911_e023_seed43_patient_auc_cv/</code></dd></div>
+          <div><dt>Best score</dt><dd>Patient OOF ROC-AUC <code>0.8534136546</code>; slice OOF ROC-AUC <code>0.8140357018</code>.</dd></div>
+          <div><dt>Baseline</dt><dd><code>E000</code> — patient OOF ROC-AUC <code>0.804140</code> after the full-dataset shuffle repair.</dd></div>
+          <div><dt>Research ledger</dt><dd><code>.research/results.jsonl</code> — 27 append-only records, E000–E026.</dd></div>
+          <div><dt>Current state</dt><dd><code>.research/state.md</code> and <code>.research/best.json</code>.</dd></div>
+          <div><dt>Metrics pack</dt><dd><code>START_HERE.md</code>, <code>CURRENT_BEST_METRICS.md</code>, and <code>ALL_EXPERIMENT_METRICS.md</code>.</dd></div>
+          <div><dt>Dataset audit</dt><dd><code>D:/Documents/Desktop/kidney stone detection-research/findings.md</code>.</dd></div>
+          <div><dt>Integrity anchors</dt><dd>Manifest SHA-256 <code>b4ec07b4…ef206</code>; outer split and CV fold hashes are preserved with E023.</dd></div>
+          <div><dt>Protected boundary</dt><dd>The sealed 40-patient test set is excluded from tuning and remains permanently closed.</dd></div>
+        </dl>
+
+        <p class="footer-note">Built as a self-contained offline teaching object. The visual-explainer format follows the linked community project’s principle that diagrams, structure, and purposeful interaction should carry explanatory meaning. Core content remains available without network access.</p>
+        <p class="footer-note">Source references: <a href="https://github.com/burntcookiedough/visual-explainer-html">visual-explainer-html</a> · <a href="https://data.mendeley.com/datasets/fwhytt5mzd/2">Mendeley Data V2</a> · local repository and research artifacts listed above.</p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    "use strict";
+
+    const threshold = 0.4531617227;
+
+    const protocolSteps = [
+      {
+        name: "Prepare the evidence boundary.",
+        body: "Scan the source tree, parse patient and label metadata, write the manifest, then freeze the 161-development / 40-sealed patient split and five development folds.",
+        artifact: "data/manifest.csv · splits/outer_split.csv · splits/cv_folds.csv"
+      },
+      {
+        name: "Prove the pipeline works.",
+        body: "Build the CNN, check the output shape and softmax behavior, save and reload a checkpoint, and verify metric formulas on synthetic tensors.",
+        artifact: "47 correctness tests passed in the final research state · CLI smoke PASS"
+      },
+      {
+        name: "Train five patient-wise folds.",
+        body: "For each fold, train on four groups and validate on the fifth. Validation uses original slices only. Reload the best checkpoint selected by patient-aware validation evidence.",
+        artifact: "fold_0/ … fold_4/ · best.keras · history.csv · val_predictions.csv"
+      },
+      {
+        name: "Build the out-of-fold score.",
+        body: "Concatenate every held-out slice prediction, average slices back to patients, calculate patient and slice ROC-AUC, and choose the locked threshold with Youden's J.",
+        artifact: "oof_predictions.csv · oof_metrics.json · threshold.json"
+      },
+      {
+        name: "Check transfer within development.",
+        body: "Run the five fold-best checkpoints as an equal-mean ensemble over the full development set. Compare score spread, distribution shape, and threshold positive rate against OOF.",
+        artifact: "probability std 0.373026 · KS 0.130435 · threshold delta 0.062112"
+      },
+      {
+        name: "Verify before promotion.",
+        body: "Confirm OOF integrity, complete fold artifacts, manifest and split hashes, passing gates, passing tests, and sealed-test exclusion. Only then can the candidate become the current best.",
+        artifact: "final verification: all checks PASS · sealed_test_used = false"
+      }
+    ];
+
+    const experimentData = [
+      ["E000", "champion reference", "0.804140", "0.796691", "—", "—", "Full-dataset shuffling removed class-order bias and created the trustworthy baseline."],
+      ["E001", "infrastructure fix", "—", "—", "—", "—", "Backend-neutral smoke-test repair; 46 passed and CLI smoke passed. No model metric changed."],
+      ["E002", "diagnostic", "0.680147", "0.553994", "—", "—", "Seed-43 fold-2 probe was only a small same-fold improvement; no global claim."],
+      ["E003", "diagnostic", "0.866667", "0.913462", "—", "—", "Seed-43 fold-3 signal was strong but still needed complete-CV confirmation."],
+      ["E004", "strong candidate", "0.854032", "0.829452", "—", "—", "OOF gates passed, but final transfer and repeat evidence were still required."],
+      ["E005", "transfer failure", "—", "—", "0.726708", "0.503106", "Locked 15-epoch full-development retrain predicted every patient positive."],
+      ["E006", "transfer failure", "—", "—", "0.447205", "0.447205", "One-epoch retrain collapsed toward the negative class; the failure was not simply late overtraining."],
+      ["E007", "transfer failure", "—", "—", "0.322981", "0.031056", "BN recalibration restored spread and prevalence but not score-distribution shape."],
+      ["E008", "transfer failure", "—", "—", "0.316770", "0.031056", "One-pass BN recalibration changed little; BN-only correction was closed."],
+      ["E009", "near-miss", "—", "—", "0.173913", "0.018634", "Equal E004 fold mean passed spread/rate but narrowly missed KS < 0.15."],
+      ["E010", "transfer failure", "—", "—", "0.242236", "0.024845", "Median aggregation was worse than equal mean."],
+      ["E011", "not material", "0.683824", "0.539090", "—", "—", "Patient-balanced fold-2 sampler barely raised patient AUC and lowered slice AUC."],
+      ["E012", "non-robust subset", "—", "—", "—", "—", "A leave-one-fold subset signal did not repeat independently; no subset selection."],
+      ["E013", "interrupted incomplete", "—", "—", "—", "—", "Windows logoff stopped seed-44 CV; partial history preserved, no complete metric claimed."],
+      ["E014", "no OOF improvement", "0.804603", "0.763229", "—", "—", "Recovered seed-44 CV passed OOF gates but did not improve meaningfully over E000."],
+      ["E015", "transfer near-miss", "0.871486", "0.839399", "0.180124", "0.012422", "Cross-seed ensemble raised OOF AUC but failed the strict transfer KS gate."],
+      ["E016", "no safe blend", "grid best 0.877510", "0.844893", "min 0.167702", "—", "The declared E004/E014 blend grid found no transfer-safe weight."],
+      ["E017", "fold replication", "0.816176", "0.780709", "—", "—", "Patient-AUC selection rescued seed-44 fold 0 versus its canonical weak result."],
+      ["E018", "fold replication", "0.854167", "0.686763", "—", "—", "Independent seed-44 fold-4 rescue replicated the selector signal."],
+      ["E019", "OOF improvement", "0.834415", "0.768757", "—", "—", "Seed-44 patient-AUC selector improved weak folds; equal ensemble still needed transfer."],
+      ["E020", "transfer near-miss", "—", "—", "0.167702", "0.043478", "All-five E019 ensemble passed spread/rate but missed KS."],
+      ["E021", "final retrain failure", "—", "—", "0.378882", "0.024845", "Exact median-epoch full-development retrain did not preserve the E019 OOF score regime."],
+      ["E022", "replication positive", "0.863971", "—", "—", "—", "Independent seed-43 fold-2 rescue raised the weak fold and supplied the E023 artifact."],
+      ["E023", "promoted best", "0.853414", "0.814036", "0.130435", "0.062112", "First patient-AUC-selected candidate to pass all OOF and transfer gates; current best."],
+      ["E024", "transfer failure", "0.856194", "0.801911", "0.192547", "0.006211", "Cross-seed selector blend raised OOF AUC but failed transfer KS."],
+      ["E025", "no safe gain", "0.853414", "—", "0.130435", "0.062112", "Predeclared 21-point blend grid selected E023 itself; no safe gain."],
+      ["E026", "robustness audit", "0.853414", "—", "—", "—", "Baseline/candidate robustness audit passed with small site uncertainty; no sealed data used."]
+    ];
+
+    const milestoneReadings = {
+      E000: ["champion reference", "E000 — full-dataset shuffle baseline", "Patient OOF ROC-AUC 0.804140. Full-dataset shuffling fixed the earlier class-order bias, so E000 became the first trustworthy research reference."],
+      E004: ["strong candidate", "E004 — strong seed-43 OOF candidate", "Patient OOF ROC-AUC 0.854032, but the later locked final retrain failed the transfer guard. A high OOF score alone was not enough."],
+      E005: ["transfer failure", "E005 — full-development retrain collapsed positive", "Every development patient crossed the locked threshold. KS was 0.726708 and threshold-rate delta was 0.503106, so E004 was rejected."],
+      E009: ["near-miss", "E009 — equal fold mean nearly transferred", "The ensemble fixed spread and threshold prevalence, but KS was 0.173913, just above the strict 0.15 limit."],
+      E015: ["transfer near-miss", "E015 — cross-seed ensemble", "OOF patient AUC reached 0.871486 and the weakest fold improved to 0.812500. Transfer KS was 0.180124, so it was not accepted."],
+      E019: ["OOF improvement", "E019 — seed-44 patient-AUC selector", "Patient OOF ROC-AUC was 0.834415 with worst fold 0.816176. The selector helped weak folds, but its equal ensemble still missed transfer KS."],
+      E021: ["final retrain failure", "E021 — single final retrain", "The exact median-epoch full-development retrain had KS 0.378882. The final-training protocol did not preserve the OOF score regime."],
+      E023: ["promoted best", "E023 — current verified development candidate", "Patient OOF ROC-AUC 0.853414, slice OOF ROC-AUC 0.814036, transfer KS 0.130435, threshold delta 0.062112, 47 tests passed, sealed test untouched."],
+      E024: ["transfer failure", "E024 — higher OOF, rejected transfer", "Patient OOF ROC-AUC was 0.856194, but KS was 0.192547. This is the clearest example of why the transfer guard matters."],
+      E026: ["robustness audit", "E026 — baseline/candidate robustness audit", "The audit preserved the E023 patient AUC and showed higher sensitivity and specificity than the baseline at the recorded thresholds, with site uncertainty noted."]
+    };
+
+    function setProtocolStep(index) {
+      const buttons = document.querySelectorAll("[data-step]");
+      buttons.forEach((button) => {
+        const active = Number(button.dataset.step) === index;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      const step = protocolSteps[index];
+      const detail = document.getElementById("stepDetail");
+      detail.innerHTML =
+        '<div class="eyebrow">Stage ' + String(index + 1).padStart(2, "0") + '</div>' +
+        '<h3>' + step.name + '</h3>' +
+        '<p>' + step.body + '</p>' +
+        '<div class="artifact-line"><strong>Key artifacts:</strong> <code>' + step.artifact + '</code></div>';
+    }
+
+    function updateScore() {
+      const slider = document.getElementById("scoreSlider");
+      const score = Number(slider.value);
+      const x = 40 + score * 680;
+      const thresholdX = 40 + threshold * 680;
+      document.getElementById("scoreValue").value = score.toFixed(3);
+      document.getElementById("scoreValue").textContent = score.toFixed(3);
+      document.getElementById("scoreMark").setAttribute("x1", x);
+      document.getElementById("scoreMark").setAttribute("x2", x);
+      document.getElementById("scoreMarkLabel").setAttribute("x", x);
+      document.getElementById("thresholdMark").setAttribute("x1", thresholdX);
+      document.getElementById("thresholdMark").setAttribute("x2", thresholdX);
+      const above = score >= threshold;
+      document.getElementById("scoreResult").textContent = above
+        ? "Above the locked threshold → the rule would call this patient Stone."
+        : "Below the locked threshold → the rule would call this patient Non-Stone.";
+    }
+
+    function renderExperiments() {
+      const tbody = document.getElementById("experimentRows");
+      tbody.innerHTML = experimentData.map((row) => {
+        const statusClass = row[1].includes("failure") || row[1].includes("near-miss") || row[1].includes("incomplete") || row[1].includes("not material") || row[1].includes("no safe") || row[1].includes("non-robust") ? "fail" : (row[1].includes("promoted") ? "pass" : "");
+        return "<tr>" +
+          "<td>" + row[0] + "</td>" +
+          '<td class="' + statusClass + '">' + row[1] + '</td>' +
+          "<td>" + row[2] + "</td>" +
+          "<td>" + row[3] + "</td>" +
+          "<td>" + row[4] + "</td>" +
+          "<td>" + row[5] + "</td>" +
+          "<td>" + row[6] + "</td>" +
+          "</tr>";
+      }).join("");
+    }
+
+    function selectExperiment(id) {
+      document.querySelectorAll("[data-exp]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.exp === id);
+      });
+      const reading = milestoneReadings[id] || milestoneReadings.E023;
+      document.getElementById("experimentReading").innerHTML =
+        '<div class="status">' + reading[0] + '</div>' +
+        '<h3>' + reading[1] + '</h3>' +
+        '<p>' + reading[2] + '</p>';
+    }
+
+    function setupNavigation() {
+      const sections = [...document.querySelectorAll("main section")];
+      const links = [...document.querySelectorAll(".section-nav a")];
+      const byId = new Map(links.map((link) => [link.getAttribute("href").slice(1), link]));
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            links.forEach((link) => link.classList.remove("active"));
+            const link = byId.get(entry.target.id);
+            if (link) link.classList.add("active");
+          }
+        });
+      }, { rootMargin: "-20% 0px -65% 0px", threshold: 0 });
+      sections.forEach((section) => observer.observe(section));
+    }
+
+    document.querySelectorAll("[data-step]").forEach((button) => {
+      button.addEventListener("click", () => setProtocolStep(Number(button.dataset.step)));
+    });
+    document.getElementById("scoreSlider").addEventListener("input", updateScore);
+    document.querySelectorAll("[data-exp]").forEach((button) => {
+      button.addEventListener("click", () => selectExperiment(button.dataset.exp));
+    });
+
+    renderExperiments();
+    updateScore();
+    setupNavigation();
+  </script>
+</body>
+</html>

@@ -14,7 +14,11 @@ from src.data import (
     canonical_preprocess_image,
     build_augmentation_layer,
     apply_mild_contrast,
+    apply_mild_augmentation,
+    build_patient_balanced_manifest,
     create_dataset,
+    resolve_shuffle_buffer,
+    validate_manifest_files,
 )
 
 
@@ -87,6 +91,26 @@ def test_scan_dataset_and_create_manifest(temp_data_env):
     p1_rows = manifest_df[manifest_df["patient_id"] == "PATIENT_001"]
     assert len(p1_rows) == 2
     assert len(p1_rows["source_image_id"].unique()) == 1
+    audit = validate_manifest_files(manifest_df, temp_data_env["root"])
+    assert audit["file_count"] == 3
+
+
+def test_manifest_validation_rejects_invalid_labels_and_stale_dimensions(temp_data_env):
+    manifest_df = scan_dataset_and_create_manifest(
+        temp_data_env["root"],
+        output_manifest_path=os.path.join(temp_data_env["root"], "manifest.csv"),
+    )
+
+    invalid_label = manifest_df.copy()
+    invalid_label["label"] = invalid_label["label"].astype(float)
+    invalid_label.loc[0, "label"] = 0.5
+    with pytest.raises(ValueError, match="labels"):
+        validate_manifest_files(invalid_label, temp_data_env["root"])
+
+    stale_dimensions = manifest_df.copy()
+    stale_dimensions.loc[0, "height"] += 1
+    with pytest.raises(RuntimeError, match="metadata mismatch"):
+        validate_manifest_files(stale_dimensions, temp_data_env["root"])
 
 
 def test_canonical_preprocess_image(temp_data_env):
@@ -130,6 +154,52 @@ def test_apply_mild_contrast():
     assert tf.reduce_max(adjusted).numpy() <= 1.0
 
 
+def test_mild_augmentation_is_reproducible_with_stateless_seed():
+    config = {
+        "data": {
+            "augmentation": {
+                "rotation_deg": 10,
+                "translation_fraction": 0.03,
+                "zoom_fraction": 0.05,
+                "contrast_fraction": 0.10,
+                "brightness_fraction": 0.05,
+            }
+        }
+    }
+    image = tf.ones((32, 32, 1), dtype=tf.float32) * 0.5
+    seed = tf.constant([42, 7], dtype=tf.int32)
+    first = apply_mild_augmentation(image, config, image_size=32, seed=seed)
+    second = apply_mild_augmentation(image, config, image_size=32, seed=seed)
+    assert np.array_equal(first.numpy(), second.numpy())
+
+
+def test_shuffle_buffer_defaults_to_the_full_dataset():
+    assert resolve_shuffle_buffer(2796) == 2796
+    assert resolve_shuffle_buffer(2796, requested=1024) == 1024
+    assert resolve_shuffle_buffer(2796, requested=5000) == 2796
+
+    with pytest.raises(ValueError, match="positive"):
+        resolve_shuffle_buffer(10, requested=0)
+
+
+def test_patient_balanced_manifest_equalizes_patient_frequency():
+    manifest_df = pd.DataFrame({
+        "patient_id": ["P1"] * 5 + ["P2"] * 2 + ["P3"],
+        "path": [f"image_{idx}.jpg" for idx in range(8)],
+        "label": [0] * 5 + [1] * 3,
+    })
+    balanced = build_patient_balanced_manifest(manifest_df, seed=17)
+    counts = balanced.groupby("patient_id").size()
+
+    assert len(balanced) == len(manifest_df)
+    assert counts.max() - counts.min() <= 1
+    assert set(counts.index) == {"P1", "P2", "P3"}
+    pd.testing.assert_frame_equal(
+        balanced,
+        build_patient_balanced_manifest(manifest_df, seed=17),
+    )
+
+
 def test_create_dataset(temp_data_env):
     manifest_path = os.path.join(temp_data_env["root"], "manifest.csv")
     manifest_df = scan_dataset_and_create_manifest(
@@ -139,6 +209,7 @@ def test_create_dataset(temp_data_env):
         "data": {
             "image_size": 128,
             "use_supplied_derivatives": False,
+            "cache_in_ram": False,
             "augmentation": {
                 "rotation_deg": 10,
                 "translation_fraction": 0.03,
@@ -154,3 +225,29 @@ def test_create_dataset(temp_data_env):
     for batch_x, batch_y in train_ds.take(1):
         assert batch_x.shape[1:] == (128, 128, 1)
         assert len(batch_y) <= 2
+
+
+def test_cached_dataset_matches_canonical_preprocessing(temp_data_env):
+    manifest_path = os.path.join(temp_data_env["root"], "manifest.csv")
+    manifest_df = scan_dataset_and_create_manifest(
+        temp_data_env["root"], output_manifest_path=manifest_path
+    )
+    config = {
+        "data": {
+            "image_size": 128,
+            "use_supplied_derivatives": False,
+            "cache_in_ram": True,
+        },
+        "training": {"batch_size": 8},
+        "seed": 42,
+    }
+    val_df = manifest_df[manifest_df["is_original"] == True].reset_index(drop=True)
+    cached_x, _ = next(iter(create_dataset(
+        val_df, temp_data_env["root"], config, split_type="val"
+    )))
+    canonical_x, _ = canonical_preprocess_image(
+        tf.constant(os.path.join(temp_data_env["root"], val_df.iloc[0]["path"])),
+        label=tf.constant(int(val_df.iloc[0]["label"])),
+        image_size=128,
+    )
+    assert np.allclose(cached_x[0].numpy(), canonical_x.numpy(), atol=1.0 / 255.0)

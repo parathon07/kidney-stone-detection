@@ -9,6 +9,15 @@ Canonical 2D binary classification pipeline (Non-Stone vs Stone) for axial CT im
 
 Download and extract the axial CT dataset to a local path (e.g., `D:/kidney_ct`).
 
+The raw CT images are intentionally not committed to this public repository:
+the local source is approximately 2.22 GB of medical imagery. Use the official
+[Mendeley Data V2 source](https://data.mendeley.com/datasets/fwhytt5mzd/2) and
+run `prepare` locally to recreate the manifest and frozen split inputs.
+
+The verified E023 current-best five-checkpoint ensemble is published under
+[`artifacts/models/e023`](artifacts/models/e023) using Git LFS. It is a
+development-only ensemble; the sealed test was not reopened.
+
 ---
 
 ## Quick Start & CLI Workflow
@@ -38,6 +47,10 @@ python train.py cv --config configs/default.yaml --data-dir D:/kidney_ct
 *Optional: run a specific fold on a separate workstation:*
 ```bash
 python train.py cv --config configs/default.yaml --data-dir D:/kidney_ct --fold 2
+```
+*Optional: repeat development-only CV with another training seed (the frozen splits are unchanged):*
+```bash
+python train.py cv --config configs/default.yaml --data-dir D:/kidney_ct --seed 43
 ```
 
 ### 5. Final Retrain, Sealed Test Evaluation & Bundle Export

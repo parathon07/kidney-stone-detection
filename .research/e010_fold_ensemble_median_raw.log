@@ -1,0 +1,15 @@
+2026-09-10 03:26:25.690570: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 03:26:28.027070: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 03:26:28.747873: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+ENSEMBLE_FOLD_START 0
+ENSEMBLE_FOLD_DONE 0 mean=0.422130266 std=0.456631643
+ENSEMBLE_FOLD_START 1
+ENSEMBLE_FOLD_DONE 1 mean=0.451959213 std=0.441442909
+ENSEMBLE_FOLD_START 2
+ENSEMBLE_FOLD_DONE 2 mean=0.448653108 std=0.128534324
+ENSEMBLE_FOLD_START 3
+ENSEMBLE_FOLD_DONE 3 mean=0.437273549 std=0.446953185
+ENSEMBLE_FOLD_START 4
+ENSEMBLE_FOLD_DONE 4 mean=0.501282139 std=0.349502434
+E010_TRANSFER_RESULT {'patient_level': True, 'n_patients': 161, 'probability_mean': 0.4652673295891043, 'probability_std': 0.393732636381436, 'ks_vs_oof': 0.2422360248447205, 'locked_threshold': 0.4280699441830316, 'gates': {'prob_std': {'value': 0.393732636381436, 'passed': True}, 'ks_vs_oof': {'value': 0.2422360248447205, 'passed': False}, 'threshold_transfer': {'oof_pos_rate': 0.4968944099378882, 'development_pos_rate': 0.4720496894409938, 'delta': 0.0248447204968944, 'passed': True}}, 'gates_passed': False, 'diagnostic_in_sample_patient_auc': 0.9952116156935433}

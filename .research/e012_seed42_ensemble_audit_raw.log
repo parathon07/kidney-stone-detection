@@ -1,0 +1,15 @@
+2026-09-10 03:53:57.813291: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 03:54:00.102102: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 03:54:00.836720: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+ENSEMBLE_FOLD_START 0
+ENSEMBLE_FOLD_DONE 0 mean=0.401808784 std=0.442384815
+ENSEMBLE_FOLD_START 1
+ENSEMBLE_FOLD_DONE 1 mean=0.449770306 std=0.462794224
+ENSEMBLE_FOLD_START 2
+ENSEMBLE_FOLD_DONE 2 mean=0.394807936 std=0.074306102
+ENSEMBLE_FOLD_START 3
+ENSEMBLE_FOLD_DONE 3 mean=0.474197277 std=0.053960511
+ENSEMBLE_FOLD_START 4
+ENSEMBLE_FOLD_DONE 4 mean=0.369143607 std=0.367137276
+E012_OPERATOR_SUMMARY {'mean_all': {'probability_mean': 0.42290737170550285, 'probability_std': 0.23772627522925308, 'ks_vs_oof': 0.2422360248447205, 'oof_positive_rate': 0.40993788819875776, 'development_positive_rate': 0.4720496894409938, 'threshold_delta': 0.06211180124223603, 'gates_passed': False, 'diagnostic_in_sample_patient_auc': 0.9992276799505715}, 'mean_omit_fold_0': {'probability_mean': 0.4225042298565282, 'probability_std': 0.19886915624293153, 'ks_vs_oof': 0.2360248447204969, 'oof_positive_rate': 0.40993788819875776, 'development_positive_rate': 0.4720496894409938, 'threshold_delta': 0.06211180124223603, 'gates_passed': False, 'diagnostic_in_sample_patient_auc': 0.9922767995057151}, 'mean_omit_fold_3': {'probability_mean': 0.41180253840760334, 'probability_std': 0.29169686662567307, 'ks_vs_oof': 0.2608695652173913, 'oof_positive_rate': 0.40993788819875776, 'development_positive_rate': 0.4658385093167702, 'threshold_delta': 0.05590062111801242, 'gates_passed': False, 'diagnostic_in_sample_patient_auc': 0.9995366079703428}}

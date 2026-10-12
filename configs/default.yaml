@@ -1,34 +1,46 @@
 seed: 42
-
 data:
   image_size: 384
   channels: 1
   use_supplied_derivatives: false
+  patient_balanced_sampling: false
+  cache_in_ram: true
   augmentation:
     rotation_deg: 10
     translation_fraction: 0.03
     zoom_fraction: 0.05
-    contrast_fraction: 0.10
-
+    contrast_fraction: 0.1
+    brightness_fraction: 0.05
 model:
   name: kidney_cnn_v1
-  filters: [64, 128, 256, 512]
+  filters:
+  - 64
+  - 128
+  - 256
+  - 512
   convs_per_block: 2
   kernel_size: 3
   dense_units: 192
   dropout: 0.35
-
 training:
-  batch_size: 16
+  batch_size: 8
   epochs: 60
-  learning_rate: 0.0003
+  learning_rate: 1.0e-04
   weight_decay: 0.0001
-  early_stopping_patience: 8
-  reduce_lr_patience: 3
+  label_smoothing: 0.05
+  early_stopping_patience: 15
+  early_stopping_min_delta: 0.002
+  reduce_lr_patience: 5
   reduce_lr_factor: 0.5
-  min_lr: 0.000001
+  min_lr: 1.0e-06
   mixed_precision: auto
-
 evaluation:
   threshold_strategy: youden_j_oof
-  class_names: [Non-Stone, Stone]
+  acceptance:
+    min_patient_roc_auc: 0.60
+    min_mean_fold_roc_auc: 0.55
+    min_worst_fold_roc_auc: 0.50
+    max_collapsed_folds: 0
+  class_names:
+  - Non-Stone
+  - Stone

@@ -14,7 +14,9 @@ from src.evaluate import (
     plot_confusion_matrix_heatmap,
     plot_cv_learning_curves,
     evaluate_oof_and_select_threshold,
+    evaluate_development_transfer,
     export_inference_bundle,
+    validate_oof_predictions,
 )
 from src.utils import save_json
 
@@ -72,6 +74,7 @@ def test_plotting_functions(temp_eval_dir):
 
 def test_evaluate_oof_and_select_threshold(temp_eval_dir):
     # Setup mock fold directories
+    high_precision_probability = np.float64("0.12345678901234567")
     for fold in range(5):
         f_dir = os.path.join(temp_eval_dir, f"fold_{fold}")
         os.makedirs(f_dir, exist_ok=True)
@@ -80,7 +83,10 @@ def test_evaluate_oof_and_select_threshold(temp_eval_dir):
             "patient_id": [f"P{fold}_A", f"P{fold}_B"],
             "source_image_id": [f"src_{fold}_0", f"src_{fold}_1"],
             "y_true": [0, 1],
-            "stone_probability": [0.1 * (fold + 1), 0.8],
+            "stone_probability": [
+                high_precision_probability if fold == 0 else 0.1 * (fold + 1),
+                0.8,
+            ],
             "predicted_class_at_0_5": [0, 1],
             "fold": [fold, fold],
         })
@@ -95,6 +101,14 @@ def test_evaluate_oof_and_select_threshold(temp_eval_dir):
     assert os.path.exists(os.path.join(temp_eval_dir, "oof_predictions.csv"))
     assert os.path.exists(os.path.join(temp_eval_dir, "threshold.json"))
     assert os.path.exists(os.path.join(temp_eval_dir, "oof_metrics.json"))
+
+    persisted_patient = pd.read_csv(
+        os.path.join(temp_eval_dir, "oof_predictions_patient_level.csv")
+    )
+    persisted_probability = persisted_patient.loc[
+        persisted_patient["patient_id"] == "P0_A", "stone_probability"
+    ].iloc[0]
+    assert abs(persisted_probability - high_precision_probability) < 1e-15
 
 
 def test_evaluate_oof_rejects_missing_or_corrupt_metrics(temp_eval_dir):
@@ -140,6 +154,61 @@ def test_evaluate_oof_rejects_missing_or_corrupt_metrics(temp_eval_dir):
         evaluate_oof_and_select_threshold(corrupt_dir, config, n_folds=1)
 
 
+def test_development_transfer_guard_rejects_collapsed_final_model(temp_eval_dir, monkeypatch):
+    dev_manifest = pd.DataFrame({
+        "path": ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+        "patient_id": ["P1", "P2", "P3", "P4"],
+        "source_image_id": ["S1", "S2", "S3", "S4"],
+        "label": [0, 0, 1, 1],
+        "is_original": [True] * 4,
+        "split": ["development"] * 4,
+    })
+    pd.DataFrame({
+        "patient_id": ["P1", "P2", "P3", "P4"],
+        "y_true": [0, 0, 1, 1],
+        "stone_probability": [0.1, 0.2, 0.8, 0.9],
+    }).to_csv(os.path.join(temp_eval_dir, "oof_predictions_patient_level.csv"), index=False)
+
+    class ConstantModel:
+        def predict(self, dataset, verbose=0):
+            return np.tile([[0.5, 0.5]], (4, 1))
+
+    monkeypatch.setattr("src.evaluate.create_dataset", lambda *args, **kwargs: object())
+    monkeypatch.setattr("src.evaluate._load_inference_model", lambda path: ConstantModel())
+
+    result = evaluate_development_transfer(
+        development_manifest_df=dev_manifest,
+        data_dir=temp_eval_dir,
+        model_path=os.path.join(temp_eval_dir, "model.keras"),
+        locked_threshold=0.5,
+        run_dir=temp_eval_dir,
+        config={},
+    )
+
+    assert result["gates_passed"] is False
+    assert result["gates"]["prob_std"]["passed"] is False
+    assert os.path.exists(os.path.join(temp_eval_dir, "final", "development_transfer.json"))
+
+
+def test_validate_oof_predictions_rejects_duplicates_and_cross_fold_patients():
+    base = pd.DataFrame({
+        "path": ["a.jpg", "b.jpg"],
+        "patient_id": ["P1", "P2"],
+        "source_image_id": ["S1", "S2"],
+        "y_true": [0, 1],
+        "stone_probability": [0.2, 0.8],
+        "fold": [0, 1],
+    })
+    duplicate = pd.concat([base, base.iloc[[0]]], ignore_index=True)
+    with pytest.raises(ValueError, match="exactly once"):
+        validate_oof_predictions(duplicate, n_folds=2)
+
+    cross_fold = base.copy()
+    cross_fold.loc[1, "patient_id"] = "P1"
+    with pytest.raises(ValueError, match="multiple OOF folds"):
+        validate_oof_predictions(cross_fold, n_folds=2)
+
+
 def test_export_inference_bundle(temp_eval_dir):
     # Create genuine minimal Keras model
     inputs = tf.keras.Input(shape=(384, 384, 1), name="input_image")
@@ -168,6 +237,7 @@ def test_export_inference_bundle(temp_eval_dir):
         locked_threshold=0.5234,
         config=config,
         metadata=meta,
+        gates_passed=True,
     )
 
     bundle_model_file = os.path.join(bundle_dir, "model.keras")

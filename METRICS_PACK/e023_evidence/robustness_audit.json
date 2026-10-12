@@ -1,0 +1,311 @@
+{
+  "n_patients": 161,
+  "baseline": {
+    "n_patients": 161,
+    "n_positive": 78,
+    "roc_auc": 0.8041396354649366,
+    "probability_mean": 0.39949362876622785,
+    "probability_std": 0.2648180273492467,
+    "threshold_metrics": {
+      "threshold": 0.430774788,
+      "sensitivity": 0.6538461538461539,
+      "specificity": 0.8192771084337349,
+      "precision": 0.7727272727272727,
+      "f1": 0.7083333333333333,
+      "tp": 51,
+      "tn": 68,
+      "fp": 15,
+      "fn": 27
+    }
+  },
+  "candidate": {
+    "n_patients": 161,
+    "n_positive": 78,
+    "roc_auc": 0.853413654618474,
+    "probability_mean": 0.4037268550201851,
+    "probability_std": 0.34572862007930816,
+    "threshold_metrics": {
+      "threshold": 0.45316172267,
+      "sensitivity": 0.7051282051282052,
+      "specificity": 0.891566265060241,
+      "precision": 0.859375,
+      "f1": 0.7746478873239436,
+      "tp": 55,
+      "tn": 74,
+      "fp": 9,
+      "fn": 23
+    }
+  },
+  "by_site": {
+    "baseline": {
+      "FA": {
+        "n_patients": 42,
+        "n_positive": 15,
+        "roc_auc": 0.7333333333333333,
+        "probability_mean": 0.35608947331297236,
+        "probability_std": 0.26898800529919803,
+        "threshold_metrics": {
+          "threshold": 0.430774788,
+          "sensitivity": 0.5333333333333333,
+          "specificity": 0.9259259259259259,
+          "precision": 0.8,
+          "f1": 0.64,
+          "tp": 8,
+          "tn": 25,
+          "fp": 2,
+          "fn": 7
+        }
+      },
+      "ME": {
+        "n_patients": 20,
+        "n_positive": 8,
+        "roc_auc": 0.8854166666666666,
+        "probability_mean": 0.3368882347257529,
+        "probability_std": 0.2563850242300129,
+        "threshold_metrics": {
+          "threshold": 0.430774788,
+          "sensitivity": 0.625,
+          "specificity": 0.9166666666666666,
+          "precision": 0.8333333333333334,
+          "f1": 0.7142857142857143,
+          "tp": 5,
+          "tn": 11,
+          "fp": 1,
+          "fn": 3
+        }
+      },
+      "RA": {
+        "n_patients": 99,
+        "n_positive": 55,
+        "roc_auc": 0.7888429752066116,
+        "probability_mean": 0.4305550672495232,
+        "probability_std": 0.2598390363844614,
+        "threshold_metrics": {
+          "threshold": 0.430774788,
+          "sensitivity": 0.6909090909090909,
+          "specificity": 0.7272727272727273,
+          "precision": 0.76,
+          "f1": 0.7238095238095238,
+          "tp": 38,
+          "tn": 32,
+          "fp": 12,
+          "fn": 17
+        }
+      }
+    },
+    "candidate": {
+      "FA": {
+        "n_patients": 42,
+        "n_positive": 15,
+        "roc_auc": 0.7827160493827161,
+        "probability_mean": 0.3518170926639961,
+        "probability_std": 0.35931582750469887,
+        "threshold_metrics": {
+          "threshold": 0.45316172267,
+          "sensitivity": 0.6666666666666666,
+          "specificity": 0.9259259259259259,
+          "precision": 0.8333333333333334,
+          "f1": 0.7407407407407408,
+          "tp": 10,
+          "tn": 25,
+          "fp": 2,
+          "fn": 5
+        }
+      },
+      "ME": {
+        "n_patients": 20,
+        "n_positive": 8,
+        "roc_auc": 0.8125,
+        "probability_mean": 0.277143490761948,
+        "probability_std": 0.23986311567370994,
+        "threshold_metrics": {
+          "threshold": 0.45316172267,
+          "sensitivity": 0.5,
+          "specificity": 0.9166666666666666,
+          "precision": 0.8,
+          "f1": 0.6153846153846154,
+          "tp": 4,
+          "tn": 11,
+          "fp": 1,
+          "fn": 4
+        }
+      },
+      "RA": {
+        "n_patients": 99,
+        "n_positive": 55,
+        "roc_auc": 0.8690082644628099,
+        "probability_mean": 0.4513215752638688,
+        "probability_std": 0.3483428979462664,
+        "threshold_metrics": {
+          "threshold": 0.45316172267,
+          "sensitivity": 0.7454545454545455,
+          "specificity": 0.8636363636363636,
+          "precision": 0.8723404255319149,
+          "f1": 0.803921568627451,
+          "tp": 41,
+          "tn": 38,
+          "fp": 6,
+          "fn": 14
+        }
+      }
+    }
+  },
+  "by_slice_bin": {
+    "baseline": {
+      "1-10": {
+        "n_patients": 69,
+        "n_positive": 36,
+        "roc_auc": 0.728956228956229,
+        "probability_mean": 0.39725701226023125,
+        "probability_std": 0.26435160709810607,
+        "threshold_metrics": {
+          "threshold": 0.430774788,
+          "sensitivity": 0.6388888888888888,
+          "specificity": 0.8181818181818182,
+          "precision": 0.7931034482758621,
+          "f1": 0.7076923076923076,
+          "tp": 23,
+          "tn": 27,
+          "fp": 6,
+          "fn": 13
+        }
+      },
+      "11-20": {
+        "n_patients": 38,
+        "n_positive": 19,
+        "roc_auc": 0.850415512465374,
+        "probability_mean": 0.4399232100513366,
+        "probability_std": 0.2636608075472849,
+        "threshold_metrics": {
+          "threshold": 0.430774788,
+          "sensitivity": 0.7368421052631579,
+          "specificity": 0.8947368421052632,
+          "precision": 0.875,
+          "f1": 0.7999999999999999,
+          "tp": 14,
+          "tn": 17,
+          "fp": 2,
+          "fn": 5
+        }
+      },
+      "21-30": {
+        "n_patients": 30,
+        "n_positive": 13,
+        "roc_auc": 0.8144796380090498,
+        "probability_mean": 0.37426980579262104,
+        "probability_std": 0.26809635605208193,
+        "threshold_metrics": {
+          "threshold": 0.430774788,
+          "sensitivity": 0.5384615384615384,
+          "specificity": 0.7647058823529411,
+          "precision": 0.6363636363636364,
+          "f1": 0.5833333333333334,
+          "tp": 7,
+          "tn": 13,
+          "fp": 4,
+          "fn": 6
+        }
+      },
+      "31+": {
+        "n_patients": 24,
+        "n_positive": 10,
+        "roc_auc": 0.8999999999999999,
+        "probability_mean": 0.37344017623655484,
+        "probability_std": 0.2560198318269958,
+        "threshold_metrics": {
+          "threshold": 0.430774788,
+          "sensitivity": 0.7,
+          "specificity": 0.7857142857142857,
+          "precision": 0.7,
+          "f1": 0.7,
+          "tp": 7,
+          "tn": 11,
+          "fp": 3,
+          "fn": 3
+        }
+      }
+    },
+    "candidate": {
+      "1-10": {
+        "n_patients": 69,
+        "n_positive": 36,
+        "roc_auc": 0.7912457912457913,
+        "probability_mean": 0.43722039979185784,
+        "probability_std": 0.3541575452000734,
+        "threshold_metrics": {
+          "threshold": 0.45316172267,
+          "sensitivity": 0.6944444444444444,
+          "specificity": 0.8181818181818182,
+          "precision": 0.8064516129032258,
+          "f1": 0.746268656716418,
+          "tp": 25,
+          "tn": 27,
+          "fp": 6,
+          "fn": 11
+        }
+      },
+      "11-20": {
+        "n_patients": 38,
+        "n_positive": 19,
+        "roc_auc": 0.925207756232687,
+        "probability_mean": 0.4238326100128327,
+        "probability_std": 0.36907625534466243,
+        "threshold_metrics": {
+          "threshold": 0.45316172267,
+          "sensitivity": 0.7894736842105263,
+          "specificity": 0.9473684210526315,
+          "precision": 0.9375,
+          "f1": 0.8571428571428572,
+          "tp": 15,
+          "tn": 18,
+          "fp": 1,
+          "fn": 4
+        }
+      },
+      "21-30": {
+        "n_patients": 30,
+        "n_positive": 13,
+        "roc_auc": 0.9276018099547512,
+        "probability_mean": 0.3238804138647275,
+        "probability_std": 0.2990804832767894,
+        "threshold_metrics": {
+          "threshold": 0.45316172267,
+          "sensitivity": 0.6153846153846154,
+          "specificity": 0.9411764705882353,
+          "precision": 0.8888888888888888,
+          "f1": 0.7272727272727274,
+          "tp": 8,
+          "tn": 16,
+          "fp": 1,
+          "fn": 5
+        }
+      },
+      "31+": {
+        "n_patients": 24,
+        "n_positive": 10,
+        "roc_auc": 0.8285714285714285,
+        "probability_mean": 0.3754068531742561,
+        "probability_std": 0.3179715152701393,
+        "threshold_metrics": {
+          "threshold": 0.45316172267,
+          "sensitivity": 0.7,
+          "specificity": 0.9285714285714286,
+          "precision": 0.875,
+          "f1": 0.7777777777777777,
+          "tp": 7,
+          "tn": 13,
+          "fp": 1,
+          "fn": 3
+        }
+      }
+    }
+  },
+  "score_shift": {
+    "mean": 0.004233226253957211,
+    "std": 0.30583091498807863,
+    "mean_absolute": 0.24044772735889897
+  },
+  "sealed_test_used": false,
+  "source_baseline": "runs\\20260827_173706_573400\\oof_predictions_patient_level.csv",
+  "source_candidate": "runs\\20260911_e023_seed43_patient_auc_cv\\oof_predictions_patient_level.csv"
+}

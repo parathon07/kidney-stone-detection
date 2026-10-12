@@ -1,0 +1,1062 @@
+{
+  "description": "Confusion-matrix images built from preserved kidney-stone research artifacts.",
+  "generated_from": "build_confusion_matrix_images.py",
+  "primary_evidence": "patient_oof_locked",
+  "sealed_test_policy": "historical sealed-test images are retained for audit only and permanently invalidated for tuning.",
+  "entries": [
+    {
+      "key": "patient_oof_locked_historical_20260826_locked",
+      "short_label": "Historical 20260826",
+      "label": "Historical pre-autoresearch run",
+      "kind": "patient_oof_locked",
+      "threshold": 0.4892271083333333,
+      "matrix": [
+        [
+          55,
+          28
+        ],
+        [
+          12,
+          66
+        ]
+      ],
+      "cm": {
+        "tn": 55,
+        "fp": 28,
+        "fn": 12,
+        "tp": 66
+      },
+      "count_line": "TN 55 | FP 28 | FN 12 | TP 66",
+      "metric_line": "ROC-AUC 0.786 | PR-AUC 0.753 | Sens 0.846 | Spec 0.663 | F1 0.767",
+      "note": "Earlier development OOF result; its sealed-test transfer is shown separately and is invalidated.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260826_231405_460200\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__historical_20260826__locked.png"
+    },
+    {
+      "key": "patient_oof_locked_e000_baseline_locked",
+      "short_label": "E000 baseline",
+      "label": "E000 baseline",
+      "kind": "patient_oof_locked",
+      "threshold": 0.43077478799999996,
+      "matrix": [
+        [
+          68,
+          15
+        ],
+        [
+          26,
+          52
+        ]
+      ],
+      "cm": {
+        "tn": 68,
+        "fp": 15,
+        "fn": 26,
+        "tp": 52
+      },
+      "count_line": "TN 68 | FP 15 | FN 26 | TP 52",
+      "metric_line": "ROC-AUC 0.804 | PR-AUC 0.805 | Sens 0.667 | Spec 0.819 | F1 0.717",
+      "note": "Experiment 0: the unchanged, shuffle-remediated baseline used as the comparison anchor.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260827_173706_573400\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__e000_baseline__locked.png"
+    },
+    {
+      "key": "patient_oof_locked_e004_seed43_locked",
+      "short_label": "E004 seed 43",
+      "label": "E004 seed-43 complete CV",
+      "kind": "patient_oof_locked",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          66,
+          17
+        ],
+        [
+          15,
+          63
+        ]
+      ],
+      "cm": {
+        "tn": 66,
+        "fp": 17,
+        "fn": 15,
+        "tp": 63
+      },
+      "count_line": "TN 66 | FP 17 | FN 15 | TP 63",
+      "metric_line": "ROC-AUC 0.854 | PR-AUC 0.849 | Sens 0.808 | Spec 0.795 | F1 0.797",
+      "note": "Strong OOF candidate, later rejected because the locked final retrain did not transfer its score regime.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260909_230224_165100\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__e004_seed43__locked.png"
+    },
+    {
+      "key": "patient_oof_locked_e014_seed44_locked",
+      "short_label": "E014 seed 44",
+      "label": "E014 seed-44 recovered CV",
+      "kind": "patient_oof_locked",
+      "threshold": 0.40396694751346807,
+      "matrix": [
+        [
+          60,
+          23
+        ],
+        [
+          18,
+          60
+        ]
+      ],
+      "cm": {
+        "tn": 60,
+        "fp": 23,
+        "fn": 18,
+        "tp": 60
+      },
+      "count_line": "TN 60 | FP 23 | FN 18 | TP 60",
+      "metric_line": "ROC-AUC 0.805 | PR-AUC 0.815 | Sens 0.769 | Spec 0.723 | F1 0.745",
+      "note": "Independent seed confirmation; complete but not a meaningful improvement over E000.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e014_seed44_recovered\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__e014_seed44__locked.png"
+    },
+    {
+      "key": "patient_oof_locked_e015_cross_seed_locked",
+      "short_label": "E015 cross-seed",
+      "label": "E015 cross-seed OOF ensemble",
+      "kind": "patient_oof_locked",
+      "threshold": 0.45712346732616416,
+      "matrix": [
+        [
+          67,
+          16
+        ],
+        [
+          14,
+          64
+        ]
+      ],
+      "cm": {
+        "tn": 67,
+        "fp": 16,
+        "fn": 14,
+        "tp": 64
+      },
+      "count_line": "TN 67 | FP 16 | FN 14 | TP 64",
+      "metric_line": "ROC-AUC 0.871 | PR-AUC 0.863 | Sens 0.821 | Spec 0.807 | F1 0.810",
+      "note": "OOF near-miss: higher patient AUC, but the development transfer KS gate failed.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e015_seed43_44_oof_ensemble\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__e015_cross_seed__locked.png"
+    },
+    {
+      "key": "patient_oof_locked_e019_seed44_selector_locked",
+      "short_label": "E019 seed 44 selector",
+      "label": "E019 seed-44 patient-AUC selector CV",
+      "kind": "patient_oof_locked",
+      "threshold": 0.42794032394886017,
+      "matrix": [
+        [
+          64,
+          19
+        ],
+        [
+          11,
+          67
+        ]
+      ],
+      "cm": {
+        "tn": 64,
+        "fp": 19,
+        "fn": 11,
+        "tp": 67
+      },
+      "count_line": "TN 64 | FP 19 | FN 11 | TP 67",
+      "metric_line": "ROC-AUC 0.834 | PR-AUC 0.836 | Sens 0.859 | Spec 0.771 | F1 0.817",
+      "note": "Selector-based seed-44 CV; its five-fold ensemble transfer is a separate diagnostic.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e019_seed44_patient_auc_cv\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__e019_seed44_selector__locked.png"
+    },
+    {
+      "key": "patient_oof_locked_e023_current_best_locked",
+      "short_label": "E023 CURRENT BEST",
+      "label": "E023 seed-43 patient-AUC selector CV",
+      "kind": "patient_oof_locked",
+      "threshold": 0.4531617226699987,
+      "matrix": [
+        [
+          74,
+          9
+        ],
+        [
+          22,
+          56
+        ]
+      ],
+      "cm": {
+        "tn": 74,
+        "fp": 9,
+        "fn": 22,
+        "tp": 56
+      },
+      "count_line": "TN 74 | FP 9 | FN 22 | TP 56",
+      "metric_line": "ROC-AUC 0.853 | PR-AUC 0.861 | Sens 0.718 | Spec 0.892 | F1 0.783",
+      "note": "Current development-only champion. It passed OOF integrity, OOF gates, transfer gates, and final verification.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e023_seed43_patient_auc_cv\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__e023_current_best__locked.png"
+    },
+    {
+      "key": "patient_oof_locked_e024_cross_seed_locked",
+      "short_label": "E024 cross-seed blend",
+      "label": "E024 cross-seed selector ensemble",
+      "kind": "patient_oof_locked",
+      "threshold": 0.4611732697424789,
+      "matrix": [
+        [
+          70,
+          13
+        ],
+        [
+          15,
+          63
+        ]
+      ],
+      "cm": {
+        "tn": 70,
+        "fp": 13,
+        "fn": 15,
+        "tp": 63
+      },
+      "count_line": "TN 70 | FP 13 | FN 15 | TP 63",
+      "metric_line": "ROC-AUC 0.856 | PR-AUC 0.865 | Sens 0.808 | Spec 0.843 | F1 0.818",
+      "note": "OOF score was slightly higher than E023, but transfer KS failed, so it was rejected.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e024_cross_seed_selector_ensemble\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_locked__e024_cross_seed__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_historical_20260826_locked",
+      "short_label": "Historical 20260826",
+      "label": "Historical pre-autoresearch run",
+      "kind": "slice_oof_locked",
+      "threshold": 0.4892271083333333,
+      "matrix": [
+        [
+          894,
+          674
+        ],
+        [
+          251,
+          977
+        ]
+      ],
+      "cm": {
+        "tn": 894,
+        "fp": 674,
+        "fn": 251,
+        "tp": 977
+      },
+      "count_line": "TN 894 | FP 674 | FN 251 | TP 977",
+      "metric_line": "ROC-AUC 0.750 | PR-AUC 0.681 | Sens 0.796 | Spec 0.570 | F1 0.679",
+      "note": "Earlier development OOF result; its sealed-test transfer is shown separately and is invalidated.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260826_231405_460200\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__historical_20260826__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_e000_baseline_locked",
+      "short_label": "E000 baseline",
+      "label": "E000 baseline",
+      "kind": "slice_oof_locked",
+      "threshold": 0.43077478799999996,
+      "matrix": [
+        [
+          1165,
+          403
+        ],
+        [
+          445,
+          783
+        ]
+      ],
+      "cm": {
+        "tn": 1165,
+        "fp": 403,
+        "fn": 445,
+        "tp": 783
+      },
+      "count_line": "TN 1165 | FP 403 | FN 445 | TP 783",
+      "metric_line": "ROC-AUC 0.797 | PR-AUC 0.778 | Sens 0.638 | Spec 0.743 | F1 0.649",
+      "note": "Experiment 0: the unchanged, shuffle-remediated baseline used as the comparison anchor.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260827_173706_573400\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__e000_baseline__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_e004_seed43_locked",
+      "short_label": "E004 seed 43",
+      "label": "E004 seed-43 complete CV",
+      "kind": "slice_oof_locked",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          1124,
+          444
+        ],
+        [
+          273,
+          955
+        ]
+      ],
+      "cm": {
+        "tn": 1124,
+        "fp": 444,
+        "fn": 273,
+        "tp": 955
+      },
+      "count_line": "TN 1124 | FP 444 | FN 273 | TP 955",
+      "metric_line": "ROC-AUC 0.829 | PR-AUC 0.806 | Sens 0.778 | Spec 0.717 | F1 0.727",
+      "note": "Strong OOF candidate, later rejected because the locked final retrain did not transfer its score regime.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260909_230224_165100\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__e004_seed43__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_e014_seed44_locked",
+      "short_label": "E014 seed 44",
+      "label": "E014 seed-44 recovered CV",
+      "kind": "slice_oof_locked",
+      "threshold": 0.40396694751346807,
+      "matrix": [
+        [
+          1011,
+          557
+        ],
+        [
+          348,
+          880
+        ]
+      ],
+      "cm": {
+        "tn": 1011,
+        "fp": 557,
+        "fn": 348,
+        "tp": 880
+      },
+      "count_line": "TN 1011 | FP 557 | FN 348 | TP 880",
+      "metric_line": "ROC-AUC 0.763 | PR-AUC 0.776 | Sens 0.717 | Spec 0.645 | F1 0.660",
+      "note": "Independent seed confirmation; complete but not a meaningful improvement over E000.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e014_seed44_recovered\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__e014_seed44__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_e015_cross_seed_locked",
+      "short_label": "E015 cross-seed",
+      "label": "E015 cross-seed OOF ensemble",
+      "kind": "slice_oof_locked",
+      "threshold": 0.45712346732616416,
+      "matrix": [
+        [
+          1196,
+          372
+        ],
+        [
+          310,
+          918
+        ]
+      ],
+      "cm": {
+        "tn": 1196,
+        "fp": 372,
+        "fn": 310,
+        "tp": 918
+      },
+      "count_line": "TN 1196 | FP 372 | FN 310 | TP 918",
+      "metric_line": "ROC-AUC 0.839 | PR-AUC 0.830 | Sens 0.748 | Spec 0.763 | F1 0.729",
+      "note": "OOF near-miss: higher patient AUC, but the development transfer KS gate failed.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e015_seed43_44_oof_ensemble\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__e015_cross_seed__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_e019_seed44_selector_locked",
+      "short_label": "E019 seed 44 selector",
+      "label": "E019 seed-44 patient-AUC selector CV",
+      "kind": "slice_oof_locked",
+      "threshold": 0.42794032394886017,
+      "matrix": [
+        [
+          1088,
+          480
+        ],
+        [
+          314,
+          914
+        ]
+      ],
+      "cm": {
+        "tn": 1088,
+        "fp": 480,
+        "fn": 314,
+        "tp": 914
+      },
+      "count_line": "TN 1088 | FP 480 | FN 314 | TP 914",
+      "metric_line": "ROC-AUC 0.769 | PR-AUC 0.743 | Sens 0.744 | Spec 0.694 | F1 0.697",
+      "note": "Selector-based seed-44 CV; its five-fold ensemble transfer is a separate diagnostic.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e019_seed44_patient_auc_cv\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__e019_seed44_selector__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_e023_current_best_locked",
+      "short_label": "E023 CURRENT BEST",
+      "label": "E023 seed-43 patient-AUC selector CV",
+      "kind": "slice_oof_locked",
+      "threshold": 0.4531617226699987,
+      "matrix": [
+        [
+          1318,
+          250
+        ],
+        [
+          449,
+          779
+        ]
+      ],
+      "cm": {
+        "tn": 1318,
+        "fp": 250,
+        "fn": 449,
+        "tp": 779
+      },
+      "count_line": "TN 1318 | FP 250 | FN 449 | TP 779",
+      "metric_line": "ROC-AUC 0.814 | PR-AUC 0.803 | Sens 0.634 | Spec 0.841 | F1 0.690",
+      "note": "Current development-only champion. It passed OOF integrity, OOF gates, transfer gates, and final verification.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e023_seed43_patient_auc_cv\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__e023_current_best__locked.png"
+    },
+    {
+      "key": "slice_oof_locked_e024_cross_seed_locked",
+      "short_label": "E024 cross-seed blend",
+      "label": "E024 cross-seed selector ensemble",
+      "kind": "slice_oof_locked",
+      "threshold": 0.4611732697424789,
+      "matrix": [
+        [
+          1242,
+          326
+        ],
+        [
+          388,
+          840
+        ]
+      ],
+      "cm": {
+        "tn": 1242,
+        "fp": 326,
+        "fn": 388,
+        "tp": 840
+      },
+      "count_line": "TN 1242 | FP 326 | FN 388 | TP 840",
+      "metric_line": "ROC-AUC 0.802 | PR-AUC 0.794 | Sens 0.684 | Spec 0.792 | F1 0.702",
+      "note": "OOF score was slightly higher than E023, but transfer KS failed, so it was rejected.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e024_cross_seed_selector_ensemble\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/slice_oof_locked__e024_cross_seed__locked.png"
+    },
+    {
+      "key": "patient_oof_fixed05_historical_20260826_fixed05",
+      "short_label": "Historical 20260826",
+      "label": "Historical pre-autoresearch run",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          55,
+          28
+        ],
+        [
+          15,
+          63
+        ]
+      ],
+      "cm": {
+        "tn": 55,
+        "fp": 28,
+        "fn": 15,
+        "tp": 63
+      },
+      "count_line": "TN 55 | FP 28 | FN 15 | TP 63",
+      "metric_line": "ROC-AUC 0.786 | PR-AUC 0.753 | Sens 0.808 | Spec 0.663 | F1 0.746",
+      "note": "Earlier development OOF result; its sealed-test transfer is shown separately and is invalidated.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260826_231405_460200\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__historical_20260826__fixed05.png"
+    },
+    {
+      "key": "patient_oof_fixed05_e000_baseline_fixed05",
+      "short_label": "E000 baseline",
+      "label": "E000 baseline",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          76,
+          7
+        ],
+        [
+          42,
+          36
+        ]
+      ],
+      "cm": {
+        "tn": 76,
+        "fp": 7,
+        "fn": 42,
+        "tp": 36
+      },
+      "count_line": "TN 76 | FP 7 | FN 42 | TP 36",
+      "metric_line": "ROC-AUC 0.804 | PR-AUC 0.805 | Sens 0.462 | Spec 0.916 | F1 0.595",
+      "note": "Experiment 0: the unchanged, shuffle-remediated baseline used as the comparison anchor.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260827_173706_573400\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__e000_baseline__fixed05.png"
+    },
+    {
+      "key": "patient_oof_fixed05_e004_seed43_fixed05",
+      "short_label": "E004 seed 43",
+      "label": "E004 seed-43 complete CV",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          68,
+          15
+        ],
+        [
+          24,
+          54
+        ]
+      ],
+      "cm": {
+        "tn": 68,
+        "fp": 15,
+        "fn": 24,
+        "tp": 54
+      },
+      "count_line": "TN 68 | FP 15 | FN 24 | TP 54",
+      "metric_line": "ROC-AUC 0.854 | PR-AUC 0.849 | Sens 0.692 | Spec 0.819 | F1 0.735",
+      "note": "Strong OOF candidate, later rejected because the locked final retrain did not transfer its score regime.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260909_230224_165100\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__e004_seed43__fixed05.png"
+    },
+    {
+      "key": "patient_oof_fixed05_e014_seed44_fixed05",
+      "short_label": "E014 seed 44",
+      "label": "E014 seed-44 recovered CV",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          65,
+          18
+        ],
+        [
+          28,
+          50
+        ]
+      ],
+      "cm": {
+        "tn": 65,
+        "fp": 18,
+        "fn": 28,
+        "tp": 50
+      },
+      "count_line": "TN 65 | FP 18 | FN 28 | TP 50",
+      "metric_line": "ROC-AUC 0.805 | PR-AUC 0.815 | Sens 0.641 | Spec 0.783 | F1 0.685",
+      "note": "Independent seed confirmation; complete but not a meaningful improvement over E000.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e014_seed44_recovered\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__e014_seed44__fixed05.png"
+    },
+    {
+      "key": "patient_oof_fixed05_e015_cross_seed_fixed05",
+      "short_label": "E015 cross-seed",
+      "label": "E015 cross-seed OOF ensemble",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          71,
+          12
+        ],
+        [
+          19,
+          59
+        ]
+      ],
+      "cm": {
+        "tn": 71,
+        "fp": 12,
+        "fn": 19,
+        "tp": 59
+      },
+      "count_line": "TN 71 | FP 12 | FN 19 | TP 59",
+      "metric_line": "ROC-AUC 0.871 | PR-AUC 0.863 | Sens 0.756 | Spec 0.855 | F1 0.792",
+      "note": "OOF near-miss: higher patient AUC, but the development transfer KS gate failed.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e015_seed43_44_oof_ensemble\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__e015_cross_seed__fixed05.png"
+    },
+    {
+      "key": "patient_oof_fixed05_e019_seed44_selector_fixed05",
+      "short_label": "E019 seed 44 selector",
+      "label": "E019 seed-44 patient-AUC selector CV",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          65,
+          18
+        ],
+        [
+          14,
+          64
+        ]
+      ],
+      "cm": {
+        "tn": 65,
+        "fp": 18,
+        "fn": 14,
+        "tp": 64
+      },
+      "count_line": "TN 65 | FP 18 | FN 14 | TP 64",
+      "metric_line": "ROC-AUC 0.834 | PR-AUC 0.836 | Sens 0.821 | Spec 0.783 | F1 0.800",
+      "note": "Selector-based seed-44 CV; its five-fold ensemble transfer is a separate diagnostic.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e019_seed44_patient_auc_cv\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__e019_seed44_selector__fixed05.png"
+    },
+    {
+      "key": "patient_oof_fixed05_e023_current_best_fixed05",
+      "short_label": "E023 CURRENT BEST",
+      "label": "E023 seed-43 patient-AUC selector CV",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          75,
+          8
+        ],
+        [
+          26,
+          52
+        ]
+      ],
+      "cm": {
+        "tn": 75,
+        "fp": 8,
+        "fn": 26,
+        "tp": 52
+      },
+      "count_line": "TN 75 | FP 8 | FN 26 | TP 52",
+      "metric_line": "ROC-AUC 0.853 | PR-AUC 0.861 | Sens 0.667 | Spec 0.904 | F1 0.754",
+      "note": "Current development-only champion. It passed OOF integrity, OOF gates, transfer gates, and final verification.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e023_seed43_patient_auc_cv\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__e023_current_best__fixed05.png"
+    },
+    {
+      "key": "patient_oof_fixed05_e024_cross_seed_fixed05",
+      "short_label": "E024 cross-seed blend",
+      "label": "E024 cross-seed selector ensemble",
+      "kind": "patient_oof_fixed05",
+      "threshold": 0.5,
+      "matrix": [
+        [
+          71,
+          12
+        ],
+        [
+          20,
+          58
+        ]
+      ],
+      "cm": {
+        "tn": 71,
+        "fp": 12,
+        "fn": 20,
+        "tp": 58
+      },
+      "count_line": "TN 71 | FP 12 | FN 20 | TP 58",
+      "metric_line": "ROC-AUC 0.856 | PR-AUC 0.865 | Sens 0.744 | Spec 0.855 | F1 0.784",
+      "note": "OOF score was slightly higher than E023, but transfer KS failed, so it was rejected.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e024_cross_seed_selector_ensemble\\oof_metrics.json",
+      "image": "graphs/confusion_matrices/patient_oof_fixed05__e024_cross_seed__fixed05.png"
+    },
+    {
+      "key": "transfer_diagnostic_e005_final_retrain",
+      "short_label": "E005 final retrain",
+      "label": "E005 final-development retrain",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          0,
+          83
+        ],
+        [
+          0,
+          78
+        ]
+      ],
+      "cm": {
+        "tn": 0,
+        "fp": 83,
+        "fn": 0,
+        "tp": 78
+      },
+      "count_line": "TN 0 | FP 83 | FN 0 | TP 78",
+      "metric_line": "Sens 1.000 | Spec 0.000 | F1 0.653 | KS 0.727 | Threshold delta 0.503 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. All development patients were predicted positive.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260909_230224_165100\\final\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260909_230224_165100\\final\\development_transfer.json",
+      "ks_vs_oof": 0.7267080745341615,
+      "threshold_delta": 0.5031055900621118,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e005_final_retrain.png"
+    },
+    {
+      "key": "transfer_diagnostic_e006_epoch1",
+      "short_label": "E006 epoch 1",
+      "label": "E006 one-epoch final retrain",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          82,
+          1
+        ],
+        [
+          71,
+          7
+        ]
+      ],
+      "cm": {
+        "tn": 82,
+        "fp": 1,
+        "fn": 71,
+        "tp": 7
+      },
+      "count_line": "TN 82 | FP 1 | FN 71 | TP 7",
+      "metric_line": "Sens 0.090 | Spec 0.988 | F1 0.163 | KS 0.447 | Threshold delta 0.447 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. The score regime collapsed toward negative predictions.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e006_final_epoch1\\final\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e006_final_epoch1\\final\\development_transfer.json",
+      "ks_vs_oof": 0.4472049689440994,
+      "threshold_delta": 0.4472049689440994,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e006_epoch1.png"
+    },
+    {
+      "key": "transfer_diagnostic_e007_bn",
+      "short_label": "E007 BN recalibration",
+      "label": "E007 three-pass BN recalibration",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          83,
+          0
+        ],
+        [
+          3,
+          75
+        ]
+      ],
+      "cm": {
+        "tn": 83,
+        "fp": 0,
+        "fn": 3,
+        "tp": 75
+      },
+      "count_line": "TN 83 | FP 0 | FN 3 | TP 75",
+      "metric_line": "Sens 0.962 | Spec 1.000 | F1 0.980 | KS 0.323 | Threshold delta 0.031 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. Prevalence recovered, but KS remained too high.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e007_bn_recalibration\\final\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e007_bn_recalibration\\final\\development_transfer.json",
+      "ks_vs_oof": 0.32298136645962733,
+      "threshold_delta": 0.031055900621118016,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e007_bn.png"
+    },
+    {
+      "key": "transfer_diagnostic_e008_bn_onepass",
+      "short_label": "E008 BN one-pass",
+      "label": "E008 one-pass BN recalibration",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          83,
+          0
+        ],
+        [
+          3,
+          75
+        ]
+      ],
+      "cm": {
+        "tn": 83,
+        "fp": 0,
+        "fn": 3,
+        "tp": 75
+      },
+      "count_line": "TN 83 | FP 0 | FN 3 | TP 75",
+      "metric_line": "Sens 0.962 | Spec 1.000 | F1 0.980 | KS 0.317 | Threshold delta 0.031 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. One pass did not materially change the BN failure.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e008_bn_onepass\\final\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e008_bn_onepass\\final\\development_transfer.json",
+      "ks_vs_oof": 0.3167701863354037,
+      "threshold_delta": 0.031055900621118016,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e008_bn_onepass.png"
+    },
+    {
+      "key": "transfer_diagnostic_e009_equal_mean",
+      "short_label": "E009 equal mean",
+      "label": "E009 equal-mean fold ensemble",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          82,
+          1
+        ],
+        [
+          2,
+          76
+        ]
+      ],
+      "cm": {
+        "tn": 82,
+        "fp": 1,
+        "fn": 2,
+        "tp": 76
+      },
+      "count_line": "TN 82 | FP 1 | FN 2 | TP 76",
+      "metric_line": "Sens 0.974 | Spec 0.988 | F1 0.981 | KS 0.174 | Threshold delta 0.019 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. A serious near-miss that failed the strict KS gate.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e009_fold_ensemble\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e009_fold_ensemble\\development_transfer.json",
+      "ks_vs_oof": 0.17391304347826086,
+      "threshold_delta": 0.018633540372670787,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e009_equal_mean.png"
+    },
+    {
+      "key": "transfer_diagnostic_e010_median",
+      "short_label": "E010 median",
+      "label": "E010 median fold ensemble",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4280699441830316,
+      "matrix": [
+        [
+          81,
+          2
+        ],
+        [
+          4,
+          74
+        ]
+      ],
+      "cm": {
+        "tn": 81,
+        "fp": 2,
+        "fn": 4,
+        "tp": 74
+      },
+      "count_line": "TN 81 | FP 2 | FN 4 | TP 74",
+      "metric_line": "Sens 0.949 | Spec 0.976 | F1 0.961 | KS 0.242 | Threshold delta 0.025 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. Median aggregation was worse than equal mean.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e010_fold_ensemble_median\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e010_fold_ensemble_median\\development_transfer.json",
+      "ks_vs_oof": 0.2422360248447205,
+      "threshold_delta": 0.0248447204968944,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e010_median.png"
+    },
+    {
+      "key": "transfer_diagnostic_e020_seed44_transfer",
+      "short_label": "E020 seed 44 transfer",
+      "label": "E020 seed-44 five-checkpoint transfer",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.42794032394886017,
+      "matrix": [
+        [
+          83,
+          0
+        ],
+        [
+          0,
+          78
+        ]
+      ],
+      "cm": {
+        "tn": 83,
+        "fp": 0,
+        "fn": 0,
+        "tp": 78
+      },
+      "count_line": "TN 83 | FP 0 | FN 0 | TP 78",
+      "metric_line": "Sens 1.000 | Spec 1.000 | F1 1.000 | KS 0.168 | Threshold delta 0.043 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. Spread and prevalence passed, but KS failed.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e019_seed44_patient_auc_cv\\final_ensemble_transfer\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260910_e019_seed44_patient_auc_cv\\final_ensemble_transfer\\development_transfer.json",
+      "ks_vs_oof": 0.16770186335403728,
+      "threshold_delta": 0.04347826086956519,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e020_seed44_transfer.png"
+    },
+    {
+      "key": "transfer_diagnostic_e021_final_retrain",
+      "short_label": "E021 final retrain",
+      "label": "E021 exact-26-epoch final retrain",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.42794032394886017,
+      "matrix": [
+        [
+          72,
+          11
+        ],
+        [
+          0,
+          78
+        ]
+      ],
+      "cm": {
+        "tn": 72,
+        "fp": 11,
+        "fn": 0,
+        "tp": 78
+      },
+      "count_line": "TN 72 | FP 11 | FN 0 | TP 78",
+      "metric_line": "Sens 1.000 | Spec 0.867 | F1 0.934 | KS 0.379 | Threshold delta 0.025 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. Single-model retraining did not preserve the CV score regime.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e021_seed44_final_epoch26_transfer\\final\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e021_seed44_final_epoch26_transfer\\final\\development_transfer.json",
+      "ks_vs_oof": 0.37888198757763975,
+      "threshold_delta": 0.024844720496894457,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e021_final_retrain.png"
+    },
+    {
+      "key": "transfer_diagnostic_e023_transfer",
+      "short_label": "E023 transfer",
+      "label": "E023 five-checkpoint development transfer",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4531617226699987,
+      "matrix": [
+        [
+          83,
+          0
+        ],
+        [
+          3,
+          75
+        ]
+      ],
+      "cm": {
+        "tn": 83,
+        "fp": 0,
+        "fn": 3,
+        "tp": 75
+      },
+      "count_line": "TN 83 | FP 0 | FN 3 | TP 75",
+      "metric_line": "Sens 0.962 | Spec 1.000 | F1 0.980 | KS 0.130 | Threshold delta 0.062 | Guard PASS",
+      "note": "Transfer diagnostic only; not a generalization result. This is the current champion's development-only guard.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e023_seed43_patient_auc_cv\\final_ensemble_transfer\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e023_seed43_patient_auc_cv\\final_ensemble_transfer\\development_transfer.json",
+      "ks_vs_oof": 0.13043478260869565,
+      "threshold_delta": 0.06211180124223603,
+      "gates_passed": true,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e023_transfer.png"
+    },
+    {
+      "key": "transfer_diagnostic_e024_transfer",
+      "short_label": "E024 transfer",
+      "label": "E024 cross-seed development transfer",
+      "kind": "transfer_diagnostic",
+      "threshold": 0.4611732697424789,
+      "matrix": [
+        [
+          83,
+          0
+        ],
+        [
+          1,
+          77
+        ]
+      ],
+      "cm": {
+        "tn": 83,
+        "fp": 0,
+        "fn": 1,
+        "tp": 77
+      },
+      "count_line": "TN 83 | FP 0 | FN 1 | TP 77",
+      "metric_line": "Sens 0.987 | Spec 1.000 | F1 0.994 | KS 0.193 | Threshold delta 0.006 | Guard FAIL",
+      "note": "Transfer diagnostic only; not a generalization result. Despite strong threshold counts, KS failed.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e024_cross_seed_selector_ensemble\\development_predictions_patient_level.csv",
+      "transfer_source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260911_e024_cross_seed_selector_ensemble\\development_transfer.json",
+      "ks_vs_oof": 0.19254658385093168,
+      "threshold_delta": 0.006211180124223614,
+      "gates_passed": false,
+      "image": "graphs/confusion_matrices/transfer_diagnostic__e024_transfer.png"
+    },
+    {
+      "key": "sealed_test_invalidated_patient",
+      "short_label": "Invalidated sealed test (patient)",
+      "label": "Historical sealed-test transfer - invalidated",
+      "kind": "sealed_test_invalidated",
+      "threshold": 0.4892271083333333,
+      "matrix": [
+        [
+          0,
+          14
+        ],
+        [
+          0,
+          26
+        ]
+      ],
+      "cm": {
+        "tn": 0,
+        "fp": 14,
+        "fn": 0,
+        "tp": 26
+      },
+      "count_line": "TN 0 | FP 14 | FN 0 | TP 26",
+      "metric_line": "ROC-AUC 0.538 | PR-AUC 0.714 | Sens 1.000 | Spec 0.000 | F1 0.788",
+      "note": "Permanently invalidated sealed-test diagnostic. It must not be used for tuning, model selection, or claims of generalization.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260826_231405_460200\\final\\test_metrics.json",
+      "image": "graphs/confusion_matrices/sealed_test_invalidated__patient.png"
+    },
+    {
+      "key": "sealed_test_invalidated_slice",
+      "short_label": "Invalidated sealed test (slice)",
+      "label": "Historical sealed-test transfer - invalidated",
+      "kind": "sealed_test_invalidated",
+      "threshold": 0.4892271083333333,
+      "matrix": [
+        [
+          0,
+          219
+        ],
+        [
+          0,
+          349
+        ]
+      ],
+      "cm": {
+        "tn": 0,
+        "fp": 219,
+        "fn": 0,
+        "tp": 349
+      },
+      "count_line": "TN 0 | FP 219 | FN 0 | TP 349",
+      "metric_line": "ROC-AUC 0.453 | PR-AUC 0.568 | Sens 1.000 | Spec 0.000 | F1 0.761",
+      "note": "Permanently invalidated sealed-test diagnostic. It must not be used for tuning, model selection, or claims of generalization.",
+      "source": "D:\\Documents\\Desktop\\kidney stone detection-isolated\\runs\\20260826_231405_460200\\final\\test_metrics.json",
+      "image": "graphs/confusion_matrices/sealed_test_invalidated__slice.png"
+    }
+  ],
+  "overviews": [
+    "graphs/confusion_matrices/patient_oof_locked_overview.png",
+    "graphs/confusion_matrices/slice_oof_locked_overview.png",
+    "graphs/confusion_matrices/patient_oof_fixed05_overview.png",
+    "graphs/confusion_matrices/transfer_diagnostic_overview.png"
+  ]
+}
