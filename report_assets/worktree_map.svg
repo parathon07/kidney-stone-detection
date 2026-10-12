@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Three-worktree repository map</title>
+  <desc id="desc">The clean main checkout is the canonical base, the isolated worktree holds the E023 research code and artifacts, and the research worktree holds dataset findings and handoff documentation.</desc>
+  <rect width="1200" height="420" fill="#f5f5f5"/>
+  <text x="48" y="44" fill="#2d3142" font-family="Arial, sans-serif" font-size="24" font-weight="700">Repository boundary</text>
+  <text x="48" y="68" fill="#4f5d75" font-family="Arial, sans-serif" font-size="12">All three worktrees point to the same commit; their working-tree contents have different roles.</text>
+
+  <g font-family="Arial, sans-serif">
+    <rect x="48" y="116" width="320" height="210" rx="6" fill="#fff" stroke="#2d3142"/>
+    <rect x="48" y="116" width="320" height="8" fill="#4C78A8"/>
+    <text x="72" y="158" fill="#7a8399" font-size="10" font-weight="700" letter-spacing="1.6">CANONICAL BASE</text>
+    <text x="72" y="190" fill="#2d3142" font-size="17" font-weight="700">Original checkout</text>
+    <text x="72" y="216" fill="#4f5d75" font-size="12">kidney stone detection</text>
+    <text x="72" y="250" fill="#2d3142" font-size="12">Branch: main</text>
+    <text x="72" y="274" fill="#2d3142" font-size="12">Status: clean</text>
+    <text x="72" y="298" fill="#4f5d75" font-size="11">Source data + historical artifacts</text>
+  </g>
+  <g font-family="Arial, sans-serif">
+    <rect x="440" y="116" width="320" height="210" rx="6" fill="#fbe8de" stroke="#eb6c36" stroke-width="2"/>
+    <rect x="440" y="116" width="320" height="8" fill="#eb6c36"/>
+    <text x="464" y="158" fill="#eb6c36" font-size="10" font-weight="700" letter-spacing="1.6">MODEL RESEARCH</text>
+    <text x="464" y="190" fill="#2d3142" font-size="17" font-weight="700">Isolated worktree</text>
+    <text x="464" y="216" fill="#4f5d75" font-size="12">kidney stone detection-isolated</text>
+    <text x="464" y="250" fill="#2d3142" font-size="12">Branch: opencode/isolated-work</text>
+    <text x="464" y="274" fill="#2d3142" font-size="12">Status: dirty, no research commit</text>
+    <text x="464" y="298" fill="#4f5d75" font-size="11">E023 + .research + report</text>
+  </g>
+  <g font-family="Arial, sans-serif">
+    <rect x="832" y="116" width="320" height="210" rx="6" fill="#fff" stroke="#2d3142"/>
+    <rect x="832" y="116" width="320" height="8" fill="#7a8399"/>
+    <text x="856" y="158" fill="#7a8399" font-size="10" font-weight="700" letter-spacing="1.6">DATA AUDIT</text>
+    <text x="856" y="190" fill="#2d3142" font-size="17" font-weight="700">Research worktree</text>
+    <text x="856" y="216" fill="#4f5d75" font-size="12">kidney stone detection-research</text>
+    <text x="856" y="250" fill="#2d3142" font-size="12">Branch: opencode/research-worktree</text>
+    <text x="856" y="274" fill="#2d3142" font-size="12">Status: dirty, no research commit</text>
+    <text x="856" y="298" fill="#4f5d75" font-size="11">findings.md + handoff.md</text>
+  </g>
+  <line x1="368" y1="222" x2="440" y2="222" stroke="#4f5d75" stroke-dasharray="6 5"/>
+  <line x1="760" y1="222" x2="832" y2="222" stroke="#4f5d75" stroke-dasharray="6 5"/>
+  <line x1="48" y1="356" x2="1152" y2="356" stroke="#c8ccd4"/>
+  <text x="48" y="386" fill="#4f5d75" font-family="Arial, sans-serif" font-size="11">Policy: document the base repo; keep experimental edits isolated; merge only after explicit review.</text>
+</svg>

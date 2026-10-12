@@ -1,0 +1,11 @@
+{
+  "fold": 4,
+  "selection_metric": "patient_level_val_roc_auc",
+  "best_epoch": 29,
+  "best_patient_val_auc": 0.9208333333333334,
+  "final_patient_val_auc_from_checkpoint": 0.9208333333333334,
+  "best_val_loss_in_history": 0.5742467641830444,
+  "total_epochs_trained": 44,
+  "val_sample_count": 498,
+  "sealed_test_used": false
+}

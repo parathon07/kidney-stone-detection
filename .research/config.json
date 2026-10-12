@@ -1,0 +1,76 @@
+{
+  "contract_version": 1,
+  "status": "ACTIVE",
+  "created_at": "2026-09-09T22:00:00+05:30",
+  "target": {
+    "name": "kidney_cnn_v1 kidney-stone detection",
+    "artifact": "D:/Documents/Desktop/kidney stone detection-isolated",
+    "model_family": "kidney_cnn_v1",
+    "task": "patient-level binary classification from original CT slices"
+  },
+  "primary_metric": {
+    "name": "development-only patient-level OOF ROC-AUC",
+    "direction": "maximize",
+    "aggregation": "mean slice probability per patient, then ROC-AUC"
+  },
+  "secondary_metrics": [
+    "slice-level OOF ROC-AUC",
+    "per-fold patient ROC-AUC, mean, and worst fold",
+    "patient/slice score distribution and transfer guard",
+    "best epoch and training stability",
+    "runtime, memory, and reproducibility",
+    "test and smoke-suite correctness"
+  ],
+  "mutable_scope": [
+    "isolated worktree training and evaluation implementation",
+    "data loading, sampling, augmentation, loss, optimizer, and schedules",
+    "development-only diagnostics and experiment configuration",
+    "research state under .research/"
+  ],
+  "frozen_scope": [
+    "original checkout D:/Documents/Desktop/kidney stone detection",
+    "manifest and frozen patient split CSVs",
+    "sealed 40-patient test set and every test result already observed",
+    "patient-level mean-probability aggregation and metric definition",
+    "original-slice-only policy; derivatives remain disabled",
+    "kidney_cnn_v1 topology unless explicitly quarantined as a separate study",
+    "no finalize, deployment, or reopening the sealed test for tuning"
+  ],
+  "hard_constraints": [
+    "no train/evaluation leakage or patient overlap",
+    "never overwrite frozen split files",
+    "never use sealed-test labels or predictions to guide tuning",
+    "all tests and smoke checks pass for a kept candidate",
+    "experiments must leave reproducible run artifacts",
+    "do not claim a single-fold diagnostic as a global improvement"
+  ],
+  "good_enough": {
+    "meaningful_margin_over_current_best_patient_oof_auc": 0.01,
+    "current_best_reference_auc": 0.80414,
+    "requires": [
+      "complete five-fold development-only run",
+      "OOF acceptance gates pass",
+      "development transfer guard passes: score std >= 0.10, KS < 0.15, threshold positive-rate delta <= 0.10",
+      "repeat or robustness confirmation at the relevant noise level",
+      "no important correctness, leakage, or resource regression",
+      "no obvious high-value experiment remains unexplored"
+    ]
+  },
+  "experiment_budget": {
+    "single_fold_diagnostic": "approximately 20 minutes",
+    "complete_cv": "approximately 2-3 hours",
+    "sealed_test": "zero additional runs"
+  },
+  "baseline": {
+    "experiment_id": "E000",
+    "run_dir": "D:/Documents/Desktop/kidney stone detection-isolated/runs/20260827_173706_573400",
+    "commit_anchor": "68b0c8d",
+    "working_tree": "isolated dirty snapshot; no commit was created",
+    "patient_oof_auc": 0.804140,
+    "slice_oof_auc": 0.796691,
+    "fold_patient_auc": [0.8676, 0.9301, 0.6618, 0.7417, 0.8625],
+    "best_epoch": [30, 31, 1, 1, 8],
+    "transfer_guard": "FAIL",
+    "sealed_test_used": false
+  }
+}

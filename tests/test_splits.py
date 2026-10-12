@@ -101,3 +101,60 @@ def test_no_silent_regeneration(temp_splits_env):
     outer_2, cv_2 = generate_patient_splits(manifest, splits_dir=temp_splits_env, seed=999)
     assert (outer_2["patient_id"] == df["patient_id"]).all()
     assert (outer_2["split"] == df["split"]).all()
+
+
+def test_seed_controls_new_split_generation(temp_splits_env):
+    manifest = create_synthetic_manifest(n_patients=201)
+    first_dir = os.path.join(temp_splits_env, "seed_42")
+    second_dir = os.path.join(temp_splits_env, "seed_999")
+
+    outer_1, _ = generate_patient_splits(manifest, splits_dir=first_dir, seed=42)
+    outer_2, _ = generate_patient_splits(manifest, splits_dir=second_dir, seed=999)
+
+    assignments_1 = outer_1.set_index("patient_id")["split"]
+    assignments_2 = outer_2.set_index("patient_id")["split"]
+    assert not assignments_1.equals(assignments_2)
+
+
+def test_patient_label_conflicts_are_rejected(temp_splits_env):
+    manifest = create_synthetic_manifest(n_patients=201)
+    patient_rows = manifest[manifest["patient_id"] == "PATIENT_000"].index
+    manifest.loc[patient_rows[0], "label"] = 0
+
+    with pytest.raises(ValueError, match="within patient records"):
+        generate_patient_splits(manifest, splits_dir=temp_splits_env)
+
+
+def test_connected_component_label_conflicts_include_patient_mapping(temp_splits_env):
+    manifest = create_synthetic_manifest(n_patients=201)
+    first = manifest[manifest["patient_id"] == "PATIENT_000"].index[0]
+    second = manifest[manifest["patient_id"] == "PATIENT_001"].index[0]
+    shared_hash = "shared-conflicting-hash"
+    manifest.loc[first, "sha256"] = shared_hash
+    manifest.loc[second, "sha256"] = shared_hash
+
+    with pytest.raises(ValueError, match="PATIENT_000.*PATIENT_001"):
+        generate_patient_splits(manifest, splits_dir=temp_splits_env)
+
+
+def test_partial_frozen_split_is_not_regenerated(temp_splits_env):
+    manifest = create_synthetic_manifest(n_patients=201)
+    pd.DataFrame({
+        "patient_id": sorted(manifest["patient_id"].unique()),
+        "split": ["development"] * 161 + ["test"] * 40,
+    }).to_csv(os.path.join(temp_splits_env, "outer_split.csv"), index=False)
+
+    with pytest.raises(FileExistsError, match="incomplete"):
+        generate_patient_splits(manifest, splits_dir=temp_splits_env)
+
+
+def test_missing_development_fold_is_rejected(temp_splits_env):
+    manifest = create_synthetic_manifest(n_patients=201)
+    generate_patient_splits(manifest, splits_dir=temp_splits_env)
+    cv_path = os.path.join(temp_splits_env, "cv_folds.csv")
+    cv_df = pd.read_csv(cv_path)
+    cv_df = cv_df.iloc[1:].reset_index(drop=True)
+    cv_df.to_csv(cv_path, index=False)
+
+    with pytest.raises(ValueError, match="exactly the development patients"):
+        load_and_validate_splits(manifest, splits_dir=temp_splits_env)

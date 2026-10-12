@@ -1,0 +1,22 @@
+{
+  "strategy": "youden_j_oof_patient_mean",
+  "threshold": 0.4531617226699987,
+  "youden_j": 0.6095149830089589,
+  "reference_0_5_metrics": {
+    "threshold": 0.5,
+    "roc_auc": 0.853413654618474,
+    "pr_auc": 0.8605877001375656,
+    "sensitivity_recall": 0.6666666666666666,
+    "specificity": 0.9036144578313253,
+    "precision": 0.8666666666666667,
+    "f1_score": 0.7536231884057971,
+    "balanced_accuracy": 0.785140562248996,
+    "confusion_matrix": {
+      "tn": 75,
+      "fp": 8,
+      "fn": 26,
+      "tp": 52
+    }
+  },
+  "patient_level": true
+}

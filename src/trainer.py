@@ -1,28 +1,66 @@
 import os
 import pandas as pd
 import numpy as np
-import tensorflow as tf
+import keras
+from keras.saving import register_keras_serializable
 from typing import Dict, Any, Tuple
 from src.model import build_model
 from src.data import create_dataset
-from src.utils import save_json
+from src.utils import save_json, set_seed
 
 
-def compile_canonical_model(model: tf.keras.Model, config: Dict[str, Any]) -> tf.keras.Model:
+@register_keras_serializable(package="kidney_cnn")
+class SmoothedSparseCCE(keras.losses.Loss):
+    """Sparse categorical cross-entropy with uniform label smoothing.
+
+    Keras 3.11's SparseCategoricalCrossentropy does not expose label_smoothing.
+    Smoothing caps prediction confidence, which keeps val_loss meaningful as an
+    early-stopping signal when training on small weakly-labeled datasets.
+    Mathematically identical to tf.keras' label_smoothing semantics.
+    """
+
+    def __init__(self, label_smoothing=0.0, name="smoothed_sparse_cce", **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.label_smoothing = float(label_smoothing)
+
+    def call(self, y_true, y_pred):
+        num_classes = y_pred.shape[-1]
+        if num_classes is None:
+            raise ValueError("SmoothedSparseCCE requires a statically known class dimension.")
+        num_classes = int(num_classes)
+        onehot = keras.ops.one_hot(keras.ops.cast(y_true, "int32"), num_classes)
+        target = onehot * (1.0 - self.label_smoothing) + (self.label_smoothing / num_classes)
+        y_pred = keras.ops.clip(y_pred, 1e-7, 1.0)
+        return -keras.ops.sum(target * keras.ops.log(y_pred), axis=-1)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"label_smoothing": self.label_smoothing})
+        return config
+
+
+def compile_canonical_model(model: keras.Model, config: Dict[str, Any]) -> keras.Model:
     """
     Compile canonical model with AdamW, SparseCategoricalCrossentropy, and minimal metrics.
+    BatchNorm gamma/beta and head biases are excluded from weight decay.
     """
     train_cfg = config.get("training", {})
     lr = train_cfg.get("learning_rate", 3e-4)
     weight_decay = train_cfg.get("weight_decay", 1e-4)
+    label_smoothing = float(train_cfg.get("label_smoothing", 0.0))
 
-    optimizer = tf.keras.optimizers.AdamW(
+    optimizer = keras.optimizers.AdamW(
         learning_rate=lr,
         weight_decay=weight_decay,
     )
+    optimizer.exclude_from_weight_decay(var_names=["gamma", "beta", "bias"])
 
-    loss = tf.keras.losses.SparseCategoricalCrossentropy()
-    metrics = [tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")]
+    if label_smoothing > 0.0:
+        loss: keras.losses.Loss = SmoothedSparseCCE(label_smoothing=label_smoothing)
+    else:
+        loss = keras.losses.SparseCategoricalCrossentropy()
+
+    metrics = [keras.metrics.SparseCategoricalAccuracy(name="accuracy")]
 
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     return model
@@ -66,8 +104,19 @@ def train_single_fold(
     fold_dir = os.path.join(run_dir, f"fold_{fold_idx}")
     os.makedirs(fold_dir, exist_ok=True)
 
-    # 1. Manifests (Training uses originals + online aug; Val uses originals only)
-    train_df = dev_manifest_df[dev_manifest_df["fold"] != fold_idx].copy()
+    # Deterministic per-fold seeding (seeds torch/keras too)
+    seed = config.get("seed", 42)
+    set_seed(seed + fold_idx)
+
+    # 1. Manifests (Training uses originals + online aug if V1 default; Val uses originals only)
+    use_derivatives = config.get("data", {}).get("use_supplied_derivatives", False)
+    if not use_derivatives:
+        train_df = dev_manifest_df[
+            (dev_manifest_df["fold"] != fold_idx) & (dev_manifest_df["is_original"] == True)
+        ].copy().reset_index(drop=True)
+    else:
+        train_df = dev_manifest_df[dev_manifest_df["fold"] != fold_idx].copy().reset_index(drop=True)
+
     val_df = dev_manifest_df[
         (dev_manifest_df["fold"] == fold_idx) & (dev_manifest_df["is_original"] == True)
     ].copy().reset_index(drop=True)
@@ -84,29 +133,30 @@ def train_single_fold(
     history_csv_path = os.path.join(fold_dir, "history.csv")
 
     callbacks = [
-        tf.keras.callbacks.ModelCheckpoint(
+        keras.callbacks.ModelCheckpoint(
             filepath=best_checkpoint_path,
             monitor="val_loss",
             mode="min",
             save_best_only=True,
             verbose=1,
         ),
-        tf.keras.callbacks.EarlyStopping(
+        keras.callbacks.EarlyStopping(
             monitor="val_loss",
             mode="min",
-            patience=config.get("training", {}).get("early_stopping_patience", 8),
-            restore_best_weights=False,
+            patience=config.get("training", {}).get("early_stopping_patience", 15),
+            min_delta=config.get("training", {}).get("early_stopping_min_delta", 0.01),
+            restore_best_weights=True,
             verbose=1,
         ),
-        tf.keras.callbacks.ReduceLROnPlateau(
+        keras.callbacks.ReduceLROnPlateau(
             monitor="val_loss",
             mode="min",
-            patience=config.get("training", {}).get("reduce_lr_patience", 3),
+            patience=config.get("training", {}).get("reduce_lr_patience", 5),
             factor=config.get("training", {}).get("reduce_lr_factor", 0.5),
             min_lr=config.get("training", {}).get("min_lr", 1e-6),
             verbose=1,
         ),
-        tf.keras.callbacks.CSVLogger(history_csv_path),
+        keras.callbacks.CSVLogger(history_csv_path),
     ]
 
     epochs = config.get("training", {}).get("epochs", 60)
@@ -123,7 +173,7 @@ def train_single_fold(
     if not os.path.exists(best_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint was not saved: {best_checkpoint_path}")
     
-    best_model = tf.keras.models.load_model(best_checkpoint_path)
+    best_model = keras.models.load_model(best_checkpoint_path, compile=False)
 
     # 5. Predict all original validation images
     raw_preds = best_model.predict(val_ds, verbose=0)
@@ -140,7 +190,7 @@ def train_single_fold(
         "fold": fold_idx,
     })
     val_pred_path = os.path.join(fold_dir, "val_predictions.csv")
-    val_predictions_df.to_csv(val_pred_path, index=False)
+    val_predictions_df.to_csv(val_pred_path, index=False, float_format="%.17g")
 
     # 6. Parse history to find best epoch
     history_df = pd.read_csv(history_csv_path)
@@ -175,10 +225,23 @@ def train_final_model(
     final_dir = os.path.join(run_dir, "final")
     os.makedirs(final_dir, exist_ok=True)
 
-    # Filter all original development images
-    dev_orig_df = dev_manifest_df[
-        (dev_manifest_df["split"] == "development") & (dev_manifest_df["is_original"] == True)
-    ].copy()
+    # Deterministic seeding for the final model (seeds torch/keras too)
+    set_seed(config.get("seed", 42) + 9999)
+
+    # Honor use_supplied_derivatives exactly like train_single_fold.
+    # The split=="development" filter is mandatory: dev_manifest_df here is the
+    # full merged manifest, and dropping it would admit test-patient data (leak).
+    use_derivatives = config.get("data", {}).get("use_supplied_derivatives", False)
+    if use_derivatives:
+        dev_orig_df = dev_manifest_df[
+            (dev_manifest_df["split"] == "development")
+        ].copy()
+    else:
+        dev_orig_df = dev_manifest_df[
+            (dev_manifest_df["split"] == "development") & (dev_manifest_df["is_original"] == True)
+        ].copy()
+    print(f"Final training set: {len(dev_orig_df)} images "
+          f"({'originals + supplied derivatives' if use_derivatives else 'originals only'})")
 
     train_ds = create_dataset(dev_orig_df, data_dir, config, split_type="train")
 
@@ -186,8 +249,19 @@ def train_final_model(
     model = build_model(config)
     model = compile_canonical_model(model, config)
 
+    # Monitor training loss (no validation data is used; sealed test is untouched)
     history_csv_path = os.path.join(final_dir, "retrain_history.csv")
-    callbacks = [tf.keras.callbacks.CSVLogger(history_csv_path)]
+    callbacks = [
+        keras.callbacks.ReduceLROnPlateau(
+            monitor="loss",
+            mode="min",
+            patience=config.get("training", {}).get("reduce_lr_patience", 5),
+            factor=config.get("training", {}).get("reduce_lr_factor", 0.5),
+            min_lr=config.get("training", {}).get("min_lr", 1e-6),
+            verbose=1,
+        ),
+        keras.callbacks.CSVLogger(history_csv_path),
+    ]
 
     print(f"\n--- Retraining Final Model on all 161 Dev Patients for {final_epochs} epochs ---")
     model.fit(
@@ -197,8 +271,11 @@ def train_final_model(
         verbose=1,
     )
 
+    # The locked budget is the selection protocol. Do not replace the exact
+    # final epoch with a training-loss checkpoint, which is not an independent
+    # validation signal and can change the selected epoch.
     final_model_path = os.path.join(final_dir, "model.keras")
     model.save(final_model_path)
-    print(f"Final model saved to: {final_model_path}")
+    print(f"Final model (exact locked epoch budget) saved to: {final_model_path}")
 
     return final_model_path

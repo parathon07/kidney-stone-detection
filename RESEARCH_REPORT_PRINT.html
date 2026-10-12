@@ -1,0 +1,2471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kidney Stone Detection Research Report</title>
+<style>
+@page { size: A4; margin: 15mm 14mm 16mm 14mm; }
+:root { --ink:#2d3142; --muted:#4f5d75; --rule:#c8ccd4; --accent:#eb6c36; }
+* { box-sizing:border-box; }
+html,body { margin:0; padding:0; background:white; color:var(--ink); font-family:Arial, Helvetica, sans-serif; line-height:1.42; font-size:10.5pt; }
+body { max-width:190mm; margin:0 auto; }
+h1 { font-size:25pt; line-height:1.05; margin:0 0 12pt; font-weight:700; }
+h2 { font-size:16pt; line-height:1.15; border-bottom:1px solid var(--rule); padding-bottom:4pt; margin:20pt 0 8pt; page-break-after:avoid; }
+h2#appendix-a-complete-experiment-metrics-ledger { page-break-before:always; }
+h3 { font-size:12pt; margin:14pt 0 5pt; page-break-after:avoid; }
+p { margin:5pt 0 8pt; }
+ul,ol { margin-top:4pt; }
+blockquote { border-left:3px solid var(--accent); margin:10pt 0; padding:6pt 12pt; background:#fff7f2; color:var(--ink); }
+code,pre { font-family:"Cascadia Mono", Consolas, monospace; font-size:8pt; }
+pre { background:#f2f3f5; border:1px solid #d9dce2; padding:8pt; overflow-wrap:anywhere; white-space:pre-wrap; }
+code { background:#f2f3f5; padding:1pt 3pt; }
+table { width:100%; border-collapse:collapse; margin:7pt 0 12pt; font-size:8.4pt; page-break-inside:auto; }
+thead { display:table-header-group; }
+tr { page-break-inside:avoid; }
+th { text-align:left; background:#eef0f3; color:var(--ink); font-weight:700; }
+th,td { border:1px solid #d4d8df; padding:4pt 5pt; vertical-align:top; }
+img { display:block; max-width:100%; height:auto; margin:8pt auto 3pt; }
+p:has(img) { page-break-inside:avoid; }
+em { color:var(--muted); }
+a { color:#2e5aa8; text-decoration:none; }
+hr { border:0; border-top:1px solid var(--rule); margin:14pt 0; }
+@media print { a { color:inherit; } img { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<h1 id="kidney-stone-detection-research-report">Kidney Stone Detection Research Report</h1>
+<h2 id="1-executive-summary">1. Executive summary</h2>
+<p>This project builds a two-class CT-image classifier:</p>
+<ul>
+<li>Non-Stone</li>
+<li>Stone</li>
+</ul>
+<p>The system does not evaluate individual slices as independent medical cases. It predicts each CT slice, averages the slice probabilities for a patient, and evaluates the patient-level result. That patient-level score is the primary metric.</p>
+<p>The final verified development candidate is E023:</p>
+<ul>
+<li>Patient-level OOF ROC-AUC: 0.853414</li>
+<li>Baseline patient-level OOF ROC-AUC: 0.804140</li>
+<li>Absolute improvement: +0.049274</li>
+<li>Slice-level OOF ROC-AUC: 0.814036</li>
+<li>Mean fold patient AUC: 0.914461</li>
+<li>Worst fold patient AUC: 0.863971</li>
+<li>Transfer guard: passed</li>
+<li>Correctness suite: 47 tests passed and CLI smoke test passed</li>
+<li>Sealed-test data: not used by E023</li>
+</ul>
+<p>The research is marked GOOD_ENOUGH because E023 is a complete, leakage-checked, transfer-safe development candidate and the final verification suite passed.</p>
+<p>This does not mean the system is clinically validated. The sealed test was previously opened by a historical failed run and collapsed to an all-positive prediction. It is permanently excluded from future tuning. There is no trustworthy untouched external evaluation result.</p>
+<p>The practical conclusion is:</p>
+<blockquote>
+<p>We have a substantially better and internally verified development model. We do not yet have evidence of clinical generalization across new hospitals or a clean external cohort.</p>
+</blockquote>
+<p>The charts and editorial diagrams in this report are deliberately separated from the metric tables: the visuals show the story, while the appendix preserves the exact experiment records. The diagram layouts follow the linked diagram-design guidance: few nodes, explicit hierarchy, no decorative shadows, and one or two focal accents.</p>
+<p><img alt="Research progress by patient-level OOF ROC-AUC" src="report_assets/progress_patient_auc.png" /></p>
+<p><em>Figure 1. Several rejected candidates scored higher on OOF AUC than E023. The transfer guard and reproducibility gates are why E023, rather than the numerically highest OOF score, became the verified BEST.</em></p>
+<h2 id="2-what-the-system-is-trying-to-do">2. What the system is trying to do</h2>
+<p>The task is:</p>
+<ol>
+<li>Read axial CT images.</li>
+<li>Predict whether each image is associated with a kidney-stone patient.</li>
+<li>Combine all slice predictions belonging to one patient.</li>
+<li>Return one patient-level probability and decision.</li>
+</ol>
+<p>The important distinction is that the label belongs to the patient, not necessarily to every individual slice. A patient may have a stone visible in only some slices, while all of that patient's slices inherit the patient label.</p>
+<h3 id="main-evaluation-unit">Main evaluation unit</h3>
+<p>The primary evaluation score is:</p>
+<pre><code>mean Stone probability across a patient's slices
+-&gt; patient-level ROC-AUC
+</code></pre>
+<p>Slice-level ROC-AUC is retained as a secondary diagnostic metric. It is not the main ranking metric.</p>
+<h2 id="3-dataset-structure">3. Dataset structure</h2>
+<p>The source is the Mendeley V2 axial CT dataset described in the repository documentation.</p>
+<h3 id="dataset-counts">Dataset counts</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th style="text-align: right;">Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total patients</td>
+<td style="text-align: right;">201</td>
+</tr>
+<tr>
+<td>Original source images</td>
+<td style="text-align: right;">3,364</td>
+</tr>
+<tr>
+<td>Original Stone images</td>
+<td style="text-align: right;">1,577</td>
+</tr>
+<tr>
+<td>Original Non-Stone images</td>
+<td style="text-align: right;">1,787</td>
+</tr>
+<tr>
+<td>Supplied derivative images</td>
+<td style="text-align: right;">35,457</td>
+</tr>
+<tr>
+<td>Total manifest rows</td>
+<td style="text-align: right;">38,821</td>
+</tr>
+<tr>
+<td>Development patients</td>
+<td style="text-align: right;">161</td>
+</tr>
+<tr>
+<td>Sealed-test patients</td>
+<td style="text-align: right;">40</td>
+</tr>
+<tr>
+<td>Development original slices</td>
+<td style="text-align: right;">2,796</td>
+</tr>
+<tr>
+<td>Sealed-test original slices</td>
+<td style="text-align: right;">568</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="Dataset structure" src="report_assets/dataset_structure.png" /></p>
+<p><em>Figure 2. The dataset has many indexed rows but only 201 independent patients. The derivative rows are not independent medical examples and were excluded from final training.</em></p>
+<p>The 35,457 derivative images are indexed in the manifest but are not used by the final research model. They are not independent patients and were found to cause memorization and validation collapse.</p>
+<h3 id="patient-wise-split">Patient-wise split</h3>
+<p>The split is frozen:</p>
+<ul>
+<li>161 patients for development</li>
+<li>40 patients for the sealed test</li>
+<li>Five patient-wise folds inside the 161 development patients</li>
+<li>Fold sizes: 33, 33, 33, 31, and 31 patients</li>
+</ul>
+<p>No patient is allowed to appear in both training and validation for a fold. The split hashes are identical between the baseline and E023:</p>
+<ul>
+<li>Outer split SHA-256: 966d1d8f4d0b17a09db1182e3a9a5194ab7283fe85d63738cb4023e0e4b9c931</li>
+<li>CV fold SHA-256: 32bf8373df2b09e4d9b53b6ba93616aff618a668c2592bc3f2a532b4379b4290</li>
+<li>Manifest SHA-256: b4ec07b42bd38e8dcc4b3689b50cd18080ed9b2dd7e5ade38728bfc8d24ef206</li>
+</ul>
+<h3 id="dataset-finding-thread-and-quarantined-alternatives">Dataset-finding thread and quarantined alternatives</h3>
+<p>The audit did not treat every dataset that looked similar online as a valid external cohort. The current training source is the Mendeley Data V2 dataset referenced by the base README: DOI <a href="https://data.mendeley.com/datasets/fwhytt5mzd/2">10.17632/fwhytt5mzd.2</a>, 201 patients, and the original/derivative structure described above.</p>
+<p>The search also found several related-looking sources. The audit conclusions were:</p>
+<table>
+<thead>
+<tr>
+<th>Candidate</th>
+<th>Finding</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Figshare <code>30342145</code></td>
+<td>Same Iraq-lineage material; approximately 3,362 original CRC entries overlap the current source</td>
+<td>Do not count as a new cohort</td>
+</tr>
+<tr>
+<td>KAUH report</td>
+<td>Claims roughly 8,400 images from 120 patients, but public material does not provide patient mapping, image labels, or sufficient licensing evidence</td>
+<td>Request documentation; do not train</td>
+</tr>
+<tr>
+<td>Yildirim repositories</td>
+<td>Approximately 1,799 images, but the directory structure appears to mirror the same dataset family and provides no independent patient-level evidence</td>
+<td>Treat as mirrors, not new data</td>
+</tr>
+<tr>
+<td>KidneyStoneTR</td>
+<td>Downloaded archive had 17,992 files, all 512×512 RGB JPEGs, with no CSV/JSON/TXT/DICOM patient map. Its advertised fold/holdout organization contains exact duplicate holdout images in other folds, and patient-level independence cannot be verified</td>
+<td>Quarantine; do not use as a test set or combine into training</td>
+</tr>
+<tr>
+<td>KidneyStoneTR-Seg</td>
+<td>Segmentation extension derived from the same family, not demonstrated to be a new independent cohort</td>
+<td>Quarantine with KidneyStoneTR</td>
+</tr>
+</tbody>
+</table>
+<p>The KidneyStoneTR archive had zero exact-file overlap with the 3,195 unique Mendeley original hashes, and normalized grayscale comparisons also found zero overlap. That is useful evidence that the files are not simply the same local images; it is not proof of an independent clinical cohort. Without patient-to-slice mapping, source documentation, and a clean duplicate audit, the advertised holdout cannot support a generalization claim.</p>
+<p>This is why the project improved the current development pipeline instead of inflating the dataset with an unverifiable external source. The temporary audit files remain outside the repository; the decision and evidence are summarized in <code>D:/Documents/Desktop/kidney stone detection-research/findings.md</code> and <code>D:/Documents/Desktop/kidney stone detection-research/handoff.md</code>.</p>
+<h3 id="dataset-flow">Dataset flow</h3>
+<p><img alt="Editorial pipeline diagram" src="report_assets/pipeline_diagram.svg" /></p>
+<p><em>Figure 3. Editorial view of the data-to-candidate pipeline. The orange node is the current verified development candidate, not a clinical endpoint.</em></p>
+<h2 id="4-model-and-pipeline">4. Model and pipeline</h2>
+<h3 id="model-configuration">Model configuration</h3>
+<p>The canonical model is named kidney_cnn_v1:</p>
+<ul>
+<li>Input: 384 x 384 grayscale image</li>
+<li>Four convolutional blocks</li>
+<li>Filters: 64, 128, 256, 512</li>
+<li>Two 3 x 3 convolutions per block</li>
+<li>Batch normalization and ReLU after convolutions</li>
+<li>2 x 2 max pooling after each block</li>
+<li>Global average pooling</li>
+<li>Dense layer with 192 units</li>
+<li>Dropout: 0.35</li>
+<li>Two-class softmax output</li>
+<li>Total parameters: 4,788,866</li>
+</ul>
+<p>Training configuration:</p>
+<ul>
+<li>Batch size: 8</li>
+<li>Learning rate: 0.0001</li>
+<li>AdamW weight decay: 0.0001</li>
+<li>Label smoothing: 0.05</li>
+<li>Maximum epochs: 60</li>
+<li>Early stopping patience: 15</li>
+<li>Early stopping minimum delta: 0.002</li>
+<li>Reduce-learning-rate patience: 5</li>
+<li>Reduce-learning-rate factor: 0.5</li>
+<li>Minimum learning rate: 0.000001</li>
+<li>Mixed precision: automatic</li>
+</ul>
+<p>Mild online augmentation is used only during training:</p>
+<ul>
+<li>Rotation: 10 degrees</li>
+<li>Translation: 3 percent</li>
+<li>Zoom: 5 percent</li>
+<li>Contrast: 10 percent</li>
+<li>Brightness: 5 percent</li>
+</ul>
+<p>Validation and test images are not augmented.</p>
+<h3 id="pipeline-flow">Pipeline flow</h3>
+<p><img alt="Editorial pipeline flow" src="report_assets/pipeline_diagram.svg" /></p>
+<p><em>Figure 4. The report uses a simplified editorial version of the pipeline so the reader can see the evaluation boundary without following every implementation detail.</em></p>
+<h3 id="experiment-ratchet">Experiment ratchet</h3>
+<p>Every experiment followed this pattern:</p>
+<p><img alt="Experiment ratchet" src="report_assets/research_loop.svg" /></p>
+<p><em>Figure 5. The autonomous research loop: every candidate was measured, checked against hard gates, and either promoted or recorded as a failure.</em></p>
+<h2 id="5-baseline-why-e000-was-selected">5. Baseline: why E000 was selected</h2>
+<p>E000 was the first strong, complete, development-only reference after correcting the data-loader shuffle problem.</p>
+<p>The baseline was selected because:</p>
+<ol>
+<li>It completed all five patient-wise folds.</li>
+<li>OOF integrity passed.</li>
+<li>No fold met the collapse criterion.</li>
+<li>It used the frozen splits.</li>
+<li>It used original images only.</li>
+<li>It did not use the sealed test.</li>
+<li>It was the strongest verified result available at the start of autonomous research.</li>
+</ol>
+<p>E000 was not perfect. Its development transfer guard failed, but it was still the correct reference because later candidates had to beat a known complete result under the same metric and split protocol.</p>
+<h3 id="e000-baseline-metrics">E000 baseline metrics</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Patient OOF ROC-AUC</td>
+<td style="text-align: right;">0.804140</td>
+</tr>
+<tr>
+<td>Slice OOF ROC-AUC</td>
+<td style="text-align: right;">0.796691</td>
+</tr>
+<tr>
+<td>Mean fold patient AUC</td>
+<td style="text-align: right;">0.812745</td>
+</tr>
+<tr>
+<td>Worst fold patient AUC</td>
+<td style="text-align: right;">0.661765</td>
+</tr>
+<tr>
+<td>Fold patient AUCs</td>
+<td style="text-align: right;">0.867647, 0.930147, 0.661765, 0.741667, 0.862500</td>
+</tr>
+<tr>
+<td>Best epochs</td>
+<td style="text-align: right;">30, 31, 1, 1, 8</td>
+</tr>
+<tr>
+<td>Locked threshold</td>
+<td style="text-align: right;">0.430775</td>
+</tr>
+<tr>
+<td>Transfer KS</td>
+<td style="text-align: right;">0.397516</td>
+</tr>
+<tr>
+<td>Transfer threshold-rate delta</td>
+<td style="text-align: right;">0.236025</td>
+</tr>
+<tr>
+<td>Transfer result</td>
+<td style="text-align: right;">FAIL</td>
+</tr>
+</tbody>
+</table>
+<p>The baseline was therefore a research champion, not a deployable candidate.</p>
+<h2 id="6-complete-experiment-history">6. Complete experiment history</h2>
+<p>The append-only experiment log contains 27 numbered records: E000 through E026. Not every record is a new model training run. Some are infrastructure fixes, transfer audits, prediction ensembles, or robustness analyses.</p>
+<h3 id="historical-experiments-before-the-numbered-autonomous-loop">Historical experiments before the numbered autonomous loop</h3>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What happened</th>
+<th>Main result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Derivative-enabled training</td>
+<td>Trained with supplied derivatives</td>
+<td>Memorization and validation collapse; validation loss rose above 7</td>
+</tr>
+<tr>
+<td>Fold-0 probe</td>
+<td>Original images with stronger regularization</td>
+<td>Patient AUC 0.5588</td>
+</tr>
+<tr>
+<td>Over-regularized CV</td>
+<td>Full five-fold trial</td>
+<td>Patient AUC 0.4669; rejected</td>
+</tr>
+<tr>
+<td>Fold-3 middle-ground probe</td>
+<td>Lower learning rate and moderate regularization</td>
+<td>Patient AUC 0.6250; single-fold signal only</td>
+</tr>
+<tr>
+<td>Pre-shuffle complete CV</td>
+<td>Original loader with partial shuffle</td>
+<td>Patient OOF AUC 0.544640; fold collapse</td>
+</tr>
+<tr>
+<td>Historical complete CV plus final test</td>
+<td>OOF looked acceptable, then final model collapsed</td>
+<td>Sealed test AUC 0.538462; all patients predicted Stone</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numbered-experiments-e000-e026">Numbered experiments E000-E026</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Experiment</th>
+<th>Result and lesson</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>E000</td>
+<td>Full-dataset shuffle baseline</td>
+<td>Patient OOF AUC 0.804140; new research reference</td>
+</tr>
+<tr>
+<td>E001</td>
+<td>Backend-neutral smoke-test repair</td>
+<td>Infrastructure only; no metric change</td>
+</tr>
+<tr>
+<td>E002</td>
+<td>Seed-43 fold-2 diagnostic</td>
+<td>Patient AUC 0.680147; slight same-fold improvement, not global evidence</td>
+</tr>
+<tr>
+<td>E003</td>
+<td>Seed-43 fold-3 diagnostic</td>
+<td>Patient AUC 0.866667; strong fold signal, but seed variance remained possible</td>
+</tr>
+<tr>
+<td>E004</td>
+<td>Complete seed-43 CV</td>
+<td>Patient OOF AUC 0.854032; strong OOF candidate</td>
+</tr>
+<tr>
+<td>E005</td>
+<td>E004 15-epoch final retrain transfer</td>
+<td>Failed: std 0.103676, KS 0.726708, threshold delta 0.503106</td>
+</tr>
+<tr>
+<td>E006</td>
+<td>E004 epoch-1 final retrain</td>
+<td>Failed: std 0.047622, KS 0.447205, delta 0.447205</td>
+</tr>
+<tr>
+<td>E007</td>
+<td>Three-pass BatchNorm recalibration</td>
+<td>Spread fixed, but KS 0.322981; rejected</td>
+</tr>
+<tr>
+<td>E008</td>
+<td>One-pass BatchNorm recalibration</td>
+<td>KS 0.316770; calibration pass count was not the solution</td>
+</tr>
+<tr>
+<td>E009</td>
+<td>Equal mean of E004 fold checkpoints</td>
+<td>Near miss: KS 0.173913</td>
+</tr>
+<tr>
+<td>E010</td>
+<td>Median of E004 fold checkpoints</td>
+<td>Worse: KS 0.242236</td>
+</tr>
+<tr>
+<td>E011</td>
+<td>Patient-balanced fold-2 training</td>
+<td>Patient AUC 0.683824, slice AUC fell; not material</td>
+</tr>
+<tr>
+<td>E012</td>
+<td>Independent subset-ensemble audit</td>
+<td>Seed-43 subset near-pass did not reproduce</td>
+</tr>
+<tr>
+<td>E013</td>
+<td>Seed-44 CV</td>
+<td>Interrupted by external Windows logoff; incomplete</td>
+</tr>
+<tr>
+<td>E014</td>
+<td>Recovered seed-44 CV</td>
+<td>Patient OOF AUC 0.804603; no meaningful improvement</td>
+</tr>
+<tr>
+<td>E015</td>
+<td>Cross-seed E004/E014 ensemble</td>
+<td>Patient OOF AUC 0.871486, but KS 0.180124</td>
+</tr>
+<tr>
+<td>E016</td>
+<td>Convex E004/E014 blend grid</td>
+<td>No blend passed KS &lt; 0.15</td>
+</tr>
+<tr>
+<td>E017</td>
+<td>Patient-AUC checkpoint selector, seed-44 fold 0</td>
+<td>Patient AUC 0.816176 vs 0.555147 canonical</td>
+</tr>
+<tr>
+<td>E018</td>
+<td>Patient-AUC selector, seed-44 fold 4</td>
+<td>Patient AUC 0.854167 vs 0.666667 canonical</td>
+</tr>
+<tr>
+<td>E019</td>
+<td>Complete seed-44 patient-AUC selector CV</td>
+<td>Patient OOF AUC 0.834415; transfer still pending</td>
+</tr>
+<tr>
+<td>E020</td>
+<td>E019 five-checkpoint ensemble transfer</td>
+<td>KS 0.167702; near miss</td>
+</tr>
+<tr>
+<td>E021</td>
+<td>E019 exact-26-epoch single retrain</td>
+<td>KS 0.378882; single-model final protocol failed</td>
+</tr>
+<tr>
+<td>E022</td>
+<td>Independent seed-43 fold-2 selector replication</td>
+<td>Patient AUC 0.863971 vs 0.680147</td>
+</tr>
+<tr>
+<td>E023</td>
+<td>Complete seed-43 patient-AUC selector CV</td>
+<td>Patient OOF AUC 0.853414; all transfer gates passed; promoted</td>
+</tr>
+<tr>
+<td>E024</td>
+<td>Equal E019/E023 cross-seed blend</td>
+<td>OOF AUC 0.856194, but KS 0.192547</td>
+</tr>
+<tr>
+<td>E025</td>
+<td>Predeclared 21-point cross-seed weight grid</td>
+<td>No transfer-safe gain over E023</td>
+</tr>
+<tr>
+<td>E026</td>
+<td>Site and patient-slice-count robustness audit</td>
+<td>Overall gain retained; small-site uncertainty recorded</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-many-runs-were-conducted">How many runs were conducted?</h3>
+<p>The persistent ledger contains <strong>27 numbered records: E000 through E026</strong>. They are not 27 identical full training runs:</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th style="text-align: right;">Count</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Training, retraining, or checkpoint-selection studies</td>
+<td style="text-align: right;">17</td>
+<td>Complete CVs, single-fold diagnostics, final-retrain probes, and BatchNorm recalibration</td>
+</tr>
+<tr>
+<td>Ensemble, transfer, blend, or robustness audits</td>
+<td style="text-align: right;">9</td>
+<td>Existing checkpoints were re-evaluated without retraining, or fixed predictions were compared</td>
+</tr>
+<tr>
+<td>Infrastructure/correctness repair</td>
+<td style="text-align: right;">1</td>
+<td>Backend-neutral smoke-test repair; no model metric changed</td>
+</tr>
+<tr>
+<td><strong>Total tracked records</strong></td>
+<td style="text-align: right;"><strong>27</strong></td>
+<td>Every result, failure, and interruption is retained</td>
+</tr>
+</tbody>
+</table>
+<p>The historical pre-loop work adds earlier derivative, regularization, shuffle, and sealed-test investigations. Those are described in the preceding table but are not silently counted as additional E000–E026 records.</p>
+<p>The full exact ledger is preserved in <a href="report_assets/experiment_metrics_appendix.md">the experiment metrics appendix</a> and the machine-readable source file at <code>D:/Documents/Desktop/kidney stone detection-isolated/.research/results.jsonl</code>. It includes every <code>metric</code>, <code>secondary</code>, status, hypothesis, reason, seed, fold, and run directory.</p>
+<h3 id="what-changed-the-frontier">What changed the frontier</h3>
+<p>The two most important interventions were:</p>
+<ol>
+<li>Fixing the training shuffle.</li>
+<li>Selecting checkpoints using patient-level validation ROC-AUC instead of only slice-level validation loss.</li>
+</ol>
+<p>The first fixed a real training-order problem. The second aligned model selection with the actual primary evaluation unit.</p>
+<h2 id="7-critical-findings">7. Critical findings</h2>
+<h3 id="finding-1-the-old-shuffle-was-genuinely-harmful">Finding 1: The old shuffle was genuinely harmful</h3>
+<p>The original manifest was class-ordered. A shuffle buffer of 1,024 was too small for the 2,796-image development set. A label-only reproduction showed:</p>
+<ul>
+<li>No positive examples in the first 72 batches.</li>
+<li>The final 50 batches were approximately 71.5 percent positive.</li>
+</ul>
+<p>This created class-blocked training epochs. Full-dataset shuffling corrected the mechanism and improved patient OOF AUC from the pre-shuffle 0.544640 to E000's 0.804140.</p>
+<h3 id="finding-2-supplied-derivatives-are-not-safe-extra-data">Finding 2: Supplied derivatives are not safe extra data</h3>
+<p>The dataset contains 35,457 supplied derivative images, but they are correlated transformations, not new patients. Training with them produced:</p>
+<ul>
+<li>Very high training accuracy.</li>
+<li>Very poor validation behavior.</li>
+<li>Very high validation loss.</li>
+<li>Evidence of memorization and distribution mismatch.</li>
+</ul>
+<p>The final configuration therefore uses original slices only and keeps derivatives disabled.</p>
+<h3 id="finding-3-patient-level-labels-make-slice-level-loss-noisy">Finding 3: Patient-level labels make slice-level loss noisy</h3>
+<p>Every slice inherits its patient's label. A positive patient may have many slices without a visually obvious stone. The visual audit estimated that approximately 25-45 percent of Stone-labeled slices may not visibly contain a stone. This is an approximate audit estimate, not a verified annotation percentage.</p>
+<p>This explains why:</p>
+<ul>
+<li>Slice validation loss is noisy.</li>
+<li>Slice-level AUC and patient-level AUC can disagree.</li>
+<li>Patient-level checkpoint selection is more aligned with the real task.</li>
+</ul>
+<h3 id="finding-4-the-final-single-model-retrain-is-not-equivalent-to-cv">Finding 4: The final single-model retrain is not equivalent to CV</h3>
+<p>The CV model is actually five different fold models, each selected from held-out patients. A final retrain is one new model trained on all development patients. It has no held-out fold and can produce a different score distribution.</p>
+<p>E005, E006, and E021 showed that a single full-development retrain can:</p>
+<ul>
+<li>Predict almost everyone positive.</li>
+<li>Predict almost everyone negative.</li>
+<li>Have good in-sample metrics but fail transfer.</li>
+</ul>
+<p>Therefore E023 uses the validated five-checkpoint ensemble rather than the old naive final retrain.</p>
+<h3 id="finding-5-site-and-file-format-are-confounded-with-labels">Finding 5: Site and file format are confounded with labels</h3>
+<p>Development site composition:</p>
+<ul>
+<li>FA: 42 patients</li>
+<li>ME: 20 patients</li>
+<li>RA: 99 patients</li>
+</ul>
+<p>The test split has a different composition:</p>
+<ul>
+<li>FA: 23 patients</li>
+<li>ME: 9 patients</li>
+<li>RA: 8 patients</li>
+</ul>
+<p>RA is also associated with a different image format pattern. A site-only baseline achieved approximately 0.562 AUC, close to the original weak model. This means a model can obtain signal from acquisition/site shortcuts rather than stone appearance.</p>
+<h3 id="finding-6-e023-is-better-but-not-uniformly-better">Finding 6: E023 is better, but not uniformly better</h3>
+<p>E023 improves overall performance, FA performance, RA performance, and most slice-count groups. It is lower on ME, which contains only 20 patients, and lower for patients with 31+ slices. That is uncertainty, not evidence that the model is universally robust.</p>
+<h3 id="finding-7-the-transfer-guard-is-necessary-but-not-a-clinical-validation">Finding 7: The transfer guard is necessary but not a clinical validation</h3>
+<p>The transfer guard compares:</p>
+<ul>
+<li>OOF scores from models evaluated on patients they did not train on.</li>
+<li>Development scores from the ensemble evaluated on the full development population.</li>
+</ul>
+<p>It is useful for detecting score collapse and distribution mismatch. It is not an independent external test. E023 passing it means the candidate is internally coherent, not that it will necessarily generalize to a new hospital.</p>
+<p><img alt="Fold stability" src="report_assets/fold_stability.png" /></p>
+<p><em>Figure 6. E023's five patient-level fold AUCs are all strong; earlier candidates contained near-chance folds even when their pooled OOF AUC looked attractive.</em></p>
+<p><img alt="Transfer guard results" src="report_assets/transfer_guard.png" /></p>
+<p><em>Figure 7. The strict transfer gates reject several attractive-looking candidates. E023 is the highlighted candidate that passes KS, score-spread, and threshold-prevalence checks together.</em></p>
+<h2 id="8-e023-complete-metric-report">8. E023 complete metric report</h2>
+<h3 id="patient-level-primary-metrics">Patient-level primary metrics</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Patients</td>
+<td style="text-align: right;">161</td>
+</tr>
+<tr>
+<td>Positive patients</td>
+<td style="text-align: right;">78</td>
+</tr>
+<tr>
+<td>Negative patients</td>
+<td style="text-align: right;">83</td>
+</tr>
+<tr>
+<td>OOF slices</td>
+<td style="text-align: right;">2,796</td>
+</tr>
+<tr>
+<td>ROC-AUC</td>
+<td style="text-align: right;">0.853414</td>
+</tr>
+<tr>
+<td>PR-AUC</td>
+<td style="text-align: right;">0.860588</td>
+</tr>
+<tr>
+<td>Youden threshold</td>
+<td style="text-align: right;">0.453162</td>
+</tr>
+<tr>
+<td>Youden J</td>
+<td style="text-align: right;">0.609515</td>
+</tr>
+<tr>
+<td>Sensitivity</td>
+<td style="text-align: right;">0.717949</td>
+</tr>
+<tr>
+<td>Specificity</td>
+<td style="text-align: right;">0.891566</td>
+</tr>
+<tr>
+<td>Precision</td>
+<td style="text-align: right;">0.861538</td>
+</tr>
+<tr>
+<td>F1</td>
+<td style="text-align: right;">0.783217</td>
+</tr>
+<tr>
+<td>Balanced accuracy</td>
+<td style="text-align: right;">0.804757</td>
+</tr>
+<tr>
+<td>TN</td>
+<td style="text-align: right;">74</td>
+</tr>
+<tr>
+<td>FP</td>
+<td style="text-align: right;">9</td>
+</tr>
+<tr>
+<td>FN</td>
+<td style="text-align: right;">22</td>
+</tr>
+<tr>
+<td>TP</td>
+<td style="text-align: right;">56</td>
+</tr>
+</tbody>
+</table>
+<p>At this threshold, the model misses 22 of 78 positive patients and incorrectly flags 9 of 83 negative patients. The operating threshold can be changed for a different clinical cost tradeoff, but that would require a predeclared decision policy.</p>
+<h3 id="patient-level-metrics-at-threshold-05">Patient-level metrics at threshold 0.5</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sensitivity</td>
+<td style="text-align: right;">0.666667</td>
+</tr>
+<tr>
+<td>Specificity</td>
+<td style="text-align: right;">0.903614</td>
+</tr>
+<tr>
+<td>Precision</td>
+<td style="text-align: right;">0.866667</td>
+</tr>
+<tr>
+<td>F1</td>
+<td style="text-align: right;">0.753623</td>
+</tr>
+<tr>
+<td>Balanced accuracy</td>
+<td style="text-align: right;">0.785141</td>
+</tr>
+<tr>
+<td>TN, FP, FN, TP</td>
+<td style="text-align: right;">75, 8, 26, 52</td>
+</tr>
+</tbody>
+</table>
+<h3 id="slice-level-secondary-metrics">Slice-level secondary metrics</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROC-AUC</td>
+<td style="text-align: right;">0.814036</td>
+</tr>
+<tr>
+<td>PR-AUC</td>
+<td style="text-align: right;">0.802870</td>
+</tr>
+<tr>
+<td>Sensitivity</td>
+<td style="text-align: right;">0.634365</td>
+</tr>
+<tr>
+<td>Specificity</td>
+<td style="text-align: right;">0.840561</td>
+</tr>
+<tr>
+<td>Precision</td>
+<td style="text-align: right;">0.757046</td>
+</tr>
+<tr>
+<td>F1</td>
+<td style="text-align: right;">0.690297</td>
+</tr>
+<tr>
+<td>Balanced accuracy</td>
+<td style="text-align: right;">0.737463</td>
+</tr>
+<tr>
+<td>TN, FP, FN, TP</td>
+<td style="text-align: right;">1,318, 250, 449, 779</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fold-metrics">Fold metrics</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Fold</th>
+<th style="text-align: right;">Patients</th>
+<th style="text-align: right;">Best epoch</th>
+<th style="text-align: right;">Patient AUC</th>
+<th style="text-align: right;">Probability std</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">33</td>
+<td style="text-align: right;">23</td>
+<td style="text-align: right;">0.937500</td>
+<td style="text-align: right;">0.240461</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">33</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0.937500</td>
+<td style="text-align: right;">0.331678</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">33</td>
+<td style="text-align: right;">26</td>
+<td style="text-align: right;">0.863971</td>
+<td style="text-align: right;">0.321003</td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">31</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">0.912500</td>
+<td style="text-align: right;">0.320205</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">31</td>
+<td style="text-align: right;">29</td>
+<td style="text-align: right;">0.920833</td>
+<td style="text-align: right;">0.320377</td>
+</tr>
+</tbody>
+</table>
+<h3 id="transfer-guard">Transfer guard</h3>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th style="text-align: right;">Value</th>
+<th style="text-align: right;">Gate</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Development probability std</td>
+<td style="text-align: right;">0.373026</td>
+<td style="text-align: right;">&gt;= 0.10</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>KS versus OOF</td>
+<td style="text-align: right;">0.130435</td>
+<td style="text-align: right;">&lt; 0.15</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>OOF positive rate</td>
+<td style="text-align: right;">40.3727%</td>
+<td style="text-align: right;">reference</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Development positive rate</td>
+<td style="text-align: right;">46.5839%</td>
+<td style="text-align: right;">reference</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Positive-rate delta</td>
+<td style="text-align: right;">0.062112</td>
+<td style="text-align: right;">&lt;= 0.10</td>
+<td>PASS</td>
+</tr>
+</tbody>
+</table>
+<h3 id="per-site-patient-auc">Per-site patient AUC</h3>
+<table>
+<thead>
+<tr>
+<th>Site</th>
+<th style="text-align: right;">Patients</th>
+<th style="text-align: right;">Baseline</th>
+<th style="text-align: right;">E023</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FA</td>
+<td style="text-align: right;">42</td>
+<td style="text-align: right;">0.733333</td>
+<td style="text-align: right;">0.782716</td>
+</tr>
+<tr>
+<td>ME</td>
+<td style="text-align: right;">20</td>
+<td style="text-align: right;">0.885417</td>
+<td style="text-align: right;">0.812500</td>
+</tr>
+<tr>
+<td>RA</td>
+<td style="text-align: right;">99</td>
+<td style="text-align: right;">0.788843</td>
+<td style="text-align: right;">0.869008</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="Site-stratified robustness" src="report_assets/site_auc.png" /></p>
+<p><em>Figure 8. E023 improves FA and RA, while ME is lower on only 20 patients. That small-site result is recorded as uncertainty rather than hidden or tuned away.</em></p>
+<h3 id="patient-slice-count-subgroup-auc">Patient slice-count subgroup AUC</h3>
+<table>
+<thead>
+<tr>
+<th>Original slices per patient</th>
+<th style="text-align: right;">Patients</th>
+<th style="text-align: right;">Baseline</th>
+<th style="text-align: right;">E023</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1-10</td>
+<td style="text-align: right;">69</td>
+<td style="text-align: right;">0.728956</td>
+<td style="text-align: right;">0.791246</td>
+</tr>
+<tr>
+<td>11-20</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">0.850416</td>
+<td style="text-align: right;">0.925208</td>
+</tr>
+<tr>
+<td>21-30</td>
+<td style="text-align: right;">30</td>
+<td style="text-align: right;">0.814480</td>
+<td style="text-align: right;">0.927602</td>
+</tr>
+<tr>
+<td>31+</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">0.900000</td>
+<td style="text-align: right;">0.828571</td>
+</tr>
+</tbody>
+</table>
+<p>The full site and subgroup threshold metrics are preserved in:</p>
+<pre><code>runs/20260911_e026_e023_robustness_audit/robustness_audit.json
+</code></pre>
+<p>One exact-threshold patient is serialized at the threshold boundary. The canonical E023 in-memory evaluator uses the locked threshold with &gt;= and reports TP=56/FN=22. A later CSV subgroup audit used a rounded decimal representation and differed by one boundary patient. ROC-AUC is unaffected. The canonical E023 oof_metrics.json is the authoritative metric artifact.</p>
+<h2 id="9-what-good-model-means-here">9. What 'good model' means here</h2>
+<h3 id="what-is-good">What is good</h3>
+<p>E023 is good relative to the defined development task because:</p>
+<ul>
+<li>It beats the baseline by a meaningful margin.</li>
+<li>The gain survives five patient-wise folds.</li>
+<li>The worst fold is much stronger than baseline.</li>
+<li>OOF integrity passes.</li>
+<li>The development transfer guard passes.</li>
+<li>The independent seed-44 selector study provided supporting evidence.</li>
+<li>The final correctness suite passes.</li>
+<li>Frozen manifest and split hashes match the baseline.</li>
+<li>No sealed-test data was used by E023.</li>
+</ul>
+<h3 id="what-is-not-proven">What is not proven</h3>
+<p>E023 does not prove:</p>
+<ul>
+<li>Clinical usefulness.</li>
+<li>Generalization to a new hospital.</li>
+<li>Generalization to a new scanner or acquisition protocol.</li>
+<li>Reliable performance on a new prevalence distribution.</li>
+<li>A clinically acceptable false-negative rate.</li>
+<li>Performance on the permanently invalidated sealed test.</li>
+</ul>
+<p>The honest description is:</p>
+<blockquote>
+<p>E023 is a strong internal development candidate and a reasonable basis for an inference prototype, not a clinically validated diagnostic model.</p>
+</blockquote>
+<h2 id="10-repository-and-script-status">10. Repository and script status</h2>
+<p><img alt="Repository boundary" src="report_assets/worktree_map.svg" /></p>
+<p><em>Figure 9. The clean base checkout is the reference point. The isolated worktree contains the E023 research state; the research worktree contains the dataset-finding thread and handoff documentation.</em></p>
+<h3 id="three-worktrees-and-version-control-boundary">Three worktrees and version-control boundary</h3>
+<p>All three worktrees point to commit <code>68b0c8dc09591f21b663c71d2a2a9d1a9922a845</code> (<code>68b0c8d</code>). The working-tree contents are intentionally different:</p>
+<table>
+<thead>
+<tr>
+<th>Location</th>
+<th>Branch</th>
+<th>Status</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection</code></td>
+<td><code>main</code></td>
+<td>Clean</td>
+<td>Canonical base repo, source images, historical artifacts</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection-isolated</code></td>
+<td><code>opencode/isolated-work</code></td>
+<td>Dirty; no research commit</td>
+<td>E023 code, runs, <code>.research/</code>, report, and model artifacts</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection-research</code></td>
+<td><code>opencode/research-worktree</code></td>
+<td>Dirty; no research commit</td>
+<td><code>findings.md</code>, <code>handoff.md</code>, dataset audit, and planning context</td>
+</tr>
+</tbody>
+</table>
+<p>The local safety stash is <code>stash@{0}</code> (<code>On main: opencode: preserve local work before moving to research worktree</code>). The separate local branch <code>feat/dataset-preparation-and-frozen-splits</code> is at <code>6ccfb40</code>; it is not the E023 champion state. No autonomous research commit was created.</p>
+<h3 id="original-checkout">Original checkout</h3>
+<p>The original checkout is clean:</p>
+<pre><code>D:/Documents/Desktop/kidney stone detection
+</code></pre>
+<p>It was protected from autonomous research changes.</p>
+<h3 id="isolated-worktree">Isolated worktree</h3>
+<p>The isolated worktree contains the working pipeline used for E023:</p>
+<pre><code>D:/Documents/Desktop/kidney stone detection-isolated
+</code></pre>
+<p>Its source changes include data loading, preprocessing, model definition, split validation, training, evaluation, tests, and CLI behavior. It also contains research scripts and persistent state under .research.</p>
+<p>No commit was created for the isolated research changes. The E023 artifacts, configuration, hashes, logs, and metric files are the reproducibility record.</p>
+<h3 id="what-exists-in-the-base-repository">What exists in the base repository?</h3>
+<p>The clean base repo contains the original end-to-end CNN project:</p>
+<table>
+<thead>
+<tr>
+<th>Base-repo path</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/README.md</code></td>
+<td>Dataset reference, installation, CLI quick start, run-artifact layout, and test instructions</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/train.py</code></td>
+<td>Orchestrates <code>prepare</code>, <code>smoke</code>, <code>cv</code>, and <code>finalize</code>; it has no safe <code>infer</code> subcommand</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/configs/default.yaml</code></td>
+<td>Original model, data, augmentation, optimizer, and evaluation defaults</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/src/data.py</code></td>
+<td>Filename metadata parsing, manifest creation, image preprocessing, augmentation, and dataset construction</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/src/model.py</code></td>
+<td><code>kidney_cnn_v1</code> convolutional network definition</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/src/splits.py</code></td>
+<td>Patient-wise outer split, five CV folds, duplicate/source grouping, leakage checks, and split hashes</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/src/trainer.py</code></td>
+<td>Model compilation, fold training, callbacks, checkpointing, and full-development retraining</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/src/evaluate.py</code></td>
+<td>Threshold metrics, ROC/PR/confusion plots, OOF aggregation, sealed-test evaluation, and bundle export</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/src/utils.py</code></td>
+<td>Configuration, seeds, hashes, metadata, runtime/GPU information, and mixed-precision setup</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/tests/</code></td>
+<td>Tests for data, evaluation, smoke behavior, splits, training, and utilities</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/requirements.txt</code></td>
+<td>Base TensorFlow/Keras, data-science, plotting, and test dependencies</td>
+</tr>
+<tr>
+<td><code>D:/Documents/Desktop/kidney stone detection/splits/</code></td>
+<td>Frozen outer and CV split CSVs</td>
+</tr>
+</tbody>
+</table>
+<p>The base CLI was designed for a conventional sequence: prepare data, smoke-test the code, run five-fold CV, and optionally finalize. The research process deliberately stopped short of the original <code>finalize</code> path because that command retrains a single model and opens the sealed test.</p>
+<h3 id="base-repo-versus-isolated-research-changes">Base repo versus isolated research changes</h3>
+<p>The isolated worktree differs from the base snapshot in <strong>14 tracked files</strong>, with approximately <strong>1,695 insertions and 169 deletions</strong>, plus untracked research state and documentation. The changes were research instrumentation and evaluation hardening, not a silent rewrite of the base repo:</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Base repo behavior</th>
+<th>Isolated research behavior used for E023</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data order</td>
+<td>Partial shuffle could preserve class blocks</td>
+<td>Full filtered-dataset shuffle; derivatives disabled</td>
+</tr>
+<tr>
+<td>Manifest integrity</td>
+<td>Metadata-oriented manifest</td>
+<td>File existence, byte-hash, dimensions, channel, and path-boundary validation</td>
+</tr>
+<tr>
+<td>Evaluation unit</td>
+<td>Original code centered on slice metrics</td>
+<td>Patient mean-probability aggregation is primary; slice metrics remain secondary</td>
+</tr>
+<tr>
+<td>Checkpoint selection</td>
+<td>Slice validation loss was the main selector</td>
+<td>Patient-level validation ROC-AUC selector was tested and used for E023</td>
+</tr>
+<tr>
+<td>OOF integrity</td>
+<td>Basic fold aggregation</td>
+<td>Exact coverage, duplicate, fold, patient, source-ID, and manifest alignment checks</td>
+</tr>
+<tr>
+<td>Transfer safety</td>
+<td>No development transfer gate</td>
+<td>Score spread, KS-vs-OOF, and threshold prevalence guard before promotion</td>
+</tr>
+<tr>
+<td>Model runtime</td>
+<td>Standard BatchNorm path</td>
+<td>Custom fp16-safe BatchNorm plus numerical-equivalence regression coverage</td>
+</tr>
+<tr>
+<td>CLI/tests</td>
+<td>Original smoke/test assumptions</td>
+<td>Backend-neutral conversion helpers, seed/patient-balanced options, and 47-test verification</td>
+</tr>
+</tbody>
+</table>
+<p>The source images remain in <code>D:/Documents/Desktop/kidney stone detection/data/</code>. The isolated worktree contains the frozen manifest and run artifacts but does not contain the source-image tree; E023 inference and transfer audits resolved images against the frozen source tree explicitly.</p>
+<h3 id="important-commands">Important commands</h3>
+<p>The canonical CLI contains:</p>
+<pre><code>python train.py prepare
+python train.py smoke
+python train.py cv
+python train.py finalize
+</code></pre>
+<p>The smoke command and tests pass. The finalize command must not be used for this research result because its design retrains a single model and opens the sealed test. A safe inference command has not yet been added.</p>
+<h2 id="11-inference-design">11. Inference design</h2>
+<p>E023 inference should work like this:</p>
+<p><img alt="Research inference workflow" src="report_assets/inference_workflow.svg" /></p>
+<p><em>Figure 10. The intended inference path uses all five E023 fold checkpoints and aggregates at the patient level. This is a research workflow, not a medical deployment interface.</em></p>
+<p>The five checkpoints are:</p>
+<pre><code>D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv/fold_0/best.keras
+D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv/fold_1/best.keras
+D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv/fold_2/best.keras
+D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv/fold_3/best.keras
+D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv/fold_4/best.keras
+</code></pre>
+<p>For a single slice, the output is a slice probability. For a patient, the correct output is the mean probability across all supplied slices. A patient-level result should not be interpreted from one arbitrary slice when the full patient study is available.</p>
+<p>The next engineering step is to create a separate inference wrapper that:</p>
+<ol>
+<li>Loads the five checkpoints.</li>
+<li>Verifies input decoding and image shape.</li>
+<li>Requires a patient ID for each slice.</li>
+<li>Writes slice probabilities.</li>
+<li>Writes patient-level probabilities and decisions.</li>
+<li>Records the model path, threshold, preprocessing configuration, and timestamp.</li>
+</ol>
+<p>This wrapper should not call finalize and should not touch the sealed-test partition.</p>
+<h2 id="12-main-bottlenecks">12. Main bottlenecks</h2>
+<p>The main bottleneck is data quality and generalization, not simply model capacity.</p>
+<h3 id="bottleneck-a-weak-labels">Bottleneck A: weak labels</h3>
+<p>Patient-level labels are copied to slices. The model is asked to learn from many slices that may not visibly show a stone. This creates label noise and makes slice-level validation loss an imperfect checkpoint criterion.</p>
+<h3 id="bottleneck-b-small-effective-sample-size">Bottleneck B: small effective sample size</h3>
+<p>There are 201 patients total, only 161 in development, and only 31-33 patients per fold. Thousands of slices do not equal thousands of independent medical cases.</p>
+<h3 id="bottleneck-c-acquisitionsite-shift">Bottleneck C: acquisition/site shift</h3>
+<p>Site and file format are correlated with split membership and labels. A model can learn scanner or site appearance instead of stone evidence.</p>
+<h3 id="bottleneck-d-split-conflicts-and-duplicates">Bottleneck D: split conflicts and duplicates</h3>
+<p>There are 154 cross-patient byte-identical original slices and several conflicting-label duplicate components. The frozen split keeps known components together, but fresh split generation requires an explicit data-policy decision.</p>
+<h3 id="bottleneck-e-final-training-score-drift">Bottleneck E: final-training score drift</h3>
+<p>The old single-model final retrain did not preserve the OOF score regime. This is why E023 uses an ensemble of held-out-fold checkpoints rather than assuming that one all-development retrain is equivalent.</p>
+<h3 id="bottleneck-f-no-clean-external-test">Bottleneck F: no clean external test</h3>
+<p>The historical sealed test was opened and produced an all-positive collapse. It cannot be reused for tuning. A new independent, untouched external cohort is required for a genuine generalization claim.</p>
+<h2 id="13-how-to-improve-the-project-next">13. How to improve the project next</h2>
+<p>Research is complete at the current defined bar. If research is deliberately resumed, the highest-value directions are:</p>
+<ol>
+<li>Build and test the E023 inference wrapper on a small, explicitly documented development-only sample.</li>
+<li>Obtain a new untouched patient-level validation cohort from different sites.</li>
+<li>Improve labels with slice-level or region-level stone annotations.</li>
+<li>Revisit the frozen split policy after explicitly resolving duplicate/conflicting-label components.</li>
+<li>Use site-stratified patient-wise development analysis without using any future test labels.</li>
+<li>Investigate domain generalization and acquisition normalization only with a new independent holdout.</li>
+<li>Consider patient-aware learning objectives or multiple-instance learning so that not every slice must be treated as equally positive.</li>
+<li>Add calibration and uncertainty reporting after ranking performance is verified on a clean external cohort.</li>
+<li>Define an abstain/review category for uncertain patients rather than forcing every patient into Stone or Non-Stone.</li>
+<li>Only then consider a new production training protocol.</li>
+</ol>
+<h3 id="recommended-future-roadmap">Recommended future roadmap</h3>
+<p>The next improvement should be <strong>better evidence</strong>, not a more complicated CNN:</p>
+<ol>
+<li>Build a separate research-only inference wrapper around the five E023 checkpoints.</li>
+<li>Obtain an untouched, patient-mapped cohort from a different acquisition site.</li>
+<li>Resolve duplicate and conflicting-label components before generating any new split.</li>
+<li>Add slice-level or region-level annotations so the loss does not assume every slice is visibly positive.</li>
+<li>Re-run the same patient-level OOF and transfer protocol on the new cohort.</li>
+<li>Only after external robustness is demonstrated, study calibration, abstention, domain generalization, or a different architecture.</li>
+</ol>
+<p>The current evidence says the bottleneck is the number and quality of independent patients, weak slice labels, and site/format confounding. Architecture search before addressing those issues would mostly make it easier to fit the same limitations.</p>
+<h2 id="14-final-conclusion">14. Final conclusion</h2>
+<p>The project began with a model whose apparently reasonable results were undermined by class-ordered batching, correlated derivatives, weak slice labels, site confounding, and a final-retrain distribution collapse.</p>
+<p>The research process corrected the most important training-order problem, excluded unsafe derivatives, froze patient-wise evaluation, aligned checkpoint selection with the patient-level objective, tested independent seeds, rejected transfer failures, and verified a five-checkpoint ensemble.</p>
+<p>E023 is the first candidate that simultaneously:</p>
+<ul>
+<li>materially improves the baseline,</li>
+<li>passes complete five-fold OOF evaluation,</li>
+<li>passes the development transfer guard,</li>
+<li>survives robustness review,</li>
+<li>passes the correctness suite,</li>
+<li>preserves the frozen split and manifest provenance,</li>
+<li>and avoids the sealed-test boundary.</li>
+</ul>
+<p>It is therefore the correct model to use for an inference prototype. It is not yet evidence of clinical deployment readiness.</p>
+<h2 id="15-key-artifacts">15. Key artifacts</h2>
+<ul>
+<li>Research contract: .research/config.json</li>
+<li>Current BEST: .research/best.json</li>
+<li>Full experiment history: .research/results.jsonl</li>
+<li>Compact state: .research/state.md</li>
+<li>E023 OOF metrics: runs/20260911_e023_seed43_patient_auc_cv/oof_metrics.json</li>
+<li>E023 threshold: runs/20260911_e023_seed43_patient_auc_cv/threshold.json</li>
+<li>E023 transfer guard: runs/20260911_e023_seed43_patient_auc_cv/final_ensemble_transfer/development_transfer.json</li>
+<li>E026 robustness audit: runs/20260911_e026_e023_robustness_audit/robustness_audit.json</li>
+<li>Dataset and process handoff: handoff.md</li>
+<li>Build contract: spec_text.txt</li>
+<li>Canonical CLI: train.py</li>
+<li>Full exact metric appendix: report_assets/experiment_metrics_appendix.md</li>
+<li>Report charts and editorial diagrams: report_assets/</li>
+<li>Clean base repository: D:/Documents/Desktop/kidney stone detection</li>
+<li>Dataset-finding report: D:/Documents/Desktop/kidney stone detection-research/findings.md</li>
+</ul>
+<h2 id="16-references-and-design-notes">16. References and design notes</h2>
+<ol>
+<li>Abdalla et al., <em>Kidney stone detection via axial CT imaging: A dataset for AI and deep learning applications</em>, Mendeley Data V2, DOI <a href="https://data.mendeley.com/datasets/fwhytt5mzd/2">10.17632/fwhytt5mzd.2</a>. The local repository cites this source in <code>D:/Documents/Desktop/kidney stone detection/README.md</code>.</li>
+<li><a href="https://github.com/cathrynlavery/diagram-design">Diagram Design by cathrynlavery</a>. Used as visual guidance for the PDF diagrams: editorial hierarchy, low node density, clear focal accents, static accessible SVG, and no decorative shadows. The diagrams in <code>report_assets/</code> are project-specific redraws; the research code and base repo do not depend on that external repository.</li>
+<li>The exact local research contract and results remain the primary evidence: <code>D:/Documents/Desktop/kidney stone detection-isolated/.research/config.json</code>, <code>best.json</code>, <code>state.md</code>, and <code>results.jsonl</code>.</li>
+</ol>
+<h2 id="appendix-a-complete-experiment-metrics-ledger">Appendix A — Complete experiment metrics ledger</h2>
+<p>This appendix is generated from the append-only research ledger at <code>D:/Documents/Desktop/kidney stone detection-isolated/.research/results.jsonl</code>. It preserves every numbered record E000–E026, including failures and incomplete runs. The summary table below is intentionally compact; each experiment's exact metric and secondary objects follow it.</p>
+<h2 id="compact-ledger">Compact ledger</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Status</th>
+<th style="text-align: right;">Main patient metric</th>
+<th style="text-align: right;">Slice metric</th>
+<th style="text-align: right;">KS / minimum KS</th>
+<th style="text-align: right;">Threshold delta</th>
+<th>Gate summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>E000</td>
+<td>champion_reference</td>
+<td style="text-align: right;">0.804140</td>
+<td style="text-align: right;">0.796691</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E001</td>
+<td>infrastructure-fix</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E002</td>
+<td>diagnostic-no-champion-change</td>
+<td style="text-align: right;">0.680147</td>
+<td style="text-align: right;">0.553994</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E003</td>
+<td>diagnostic-no-champion-change</td>
+<td style="text-align: right;">0.866667</td>
+<td style="text-align: right;">0.913462</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E004</td>
+<td>strong-candidate-pending-transfer-and-repeat</td>
+<td style="text-align: right;">0.854032</td>
+<td style="text-align: right;">0.829452</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td>mean=0.839265; worst=0.680147</td>
+</tr>
+<tr>
+<td>E005</td>
+<td>discarded-transfer-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.726708</td>
+<td style="text-align: right;">0.503106</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E006</td>
+<td>discarded-transfer-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.447205</td>
+<td style="text-align: right;">0.447205</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E007</td>
+<td>discarded-transfer-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.322981</td>
+<td style="text-align: right;">0.031056</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E008</td>
+<td>discarded-transfer-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.316770</td>
+<td style="text-align: right;">0.031056</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E009</td>
+<td>near-miss-ks-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.173913</td>
+<td style="text-align: right;">0.018634</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E010</td>
+<td>discarded-transfer-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.242236</td>
+<td style="text-align: right;">0.024845</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E011</td>
+<td>discarded-not-material</td>
+<td style="text-align: right;">0.683824</td>
+<td style="text-align: right;">0.539090</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E012</td>
+<td>discarded-non-robust-subset</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E013</td>
+<td>interrupted-external-incomplete</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td>incomplete</td>
+</tr>
+<tr>
+<td>E014</td>
+<td>discarded-no-oof-improvement</td>
+<td style="text-align: right;">0.804603</td>
+<td style="text-align: right;">0.763229</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td>mean=0.788529; worst=0.555147; OOF=PASS</td>
+</tr>
+<tr>
+<td>E015</td>
+<td>near-miss-transfer-ks-failure</td>
+<td style="text-align: right;">0.871486</td>
+<td style="text-align: right;">0.839399</td>
+<td style="text-align: right;">0.180124</td>
+<td style="text-align: right;">0.012422</td>
+<td>mean=0.879461; worst=0.812500; transfer=FAIL; OOF=PASS</td>
+</tr>
+<tr>
+<td>E016</td>
+<td>discarded-no-transfer-safe-blend</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.167702</td>
+<td style="text-align: right;">—</td>
+<td>any_transfer=FAIL</td>
+</tr>
+<tr>
+<td>E017</td>
+<td>promising-fold-replication-required</td>
+<td style="text-align: right;">0.816176</td>
+<td style="text-align: right;">0.780709</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E018</td>
+<td>promising-replication</td>
+<td style="text-align: right;">0.854167</td>
+<td style="text-align: right;">0.686763</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E019</td>
+<td>oof-improvement-transfer-pending</td>
+<td style="text-align: right;">0.834415</td>
+<td style="text-align: right;">0.768757</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td>mean=0.877402; worst=0.816176; OOF=PASS</td>
+</tr>
+<tr>
+<td>E020</td>
+<td>near-miss-transfer-ks-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.167702</td>
+<td style="text-align: right;">0.043478</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E021</td>
+<td>discarded-final-retrain-ks-failure</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.378882</td>
+<td style="text-align: right;">0.024845</td>
+<td>transfer=FAIL</td>
+</tr>
+<tr>
+<td>E022</td>
+<td>independent-seed-replication-positive</td>
+<td style="text-align: right;">0.863971</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+<tr>
+<td>E023</td>
+<td>promoted-best-development-transfer-safe</td>
+<td style="text-align: right;">0.853414</td>
+<td style="text-align: right;">0.814036</td>
+<td style="text-align: right;">0.130435</td>
+<td style="text-align: right;">0.062112</td>
+<td>mean=0.914461; worst=0.863971; transfer=PASS; OOF=PASS</td>
+</tr>
+<tr>
+<td>E024</td>
+<td>discarded-transfer-ks-failure</td>
+<td style="text-align: right;">0.856194</td>
+<td style="text-align: right;">0.801911</td>
+<td style="text-align: right;">0.192547</td>
+<td style="text-align: right;">0.006211</td>
+<td>mean=0.900931; worst=0.863971; transfer=FAIL; OOF=PASS</td>
+</tr>
+<tr>
+<td>E025</td>
+<td>no_transfer_safe_gain</td>
+<td style="text-align: right;">0.853414</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.130435</td>
+<td style="text-align: right;">0.062112</td>
+<td>selected_transfer=PASS</td>
+</tr>
+<tr>
+<td>E026</td>
+<td>robustness-audit-passed-with-small-site-uncertainty</td>
+<td style="text-align: right;">0.804140</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="exact-recorded-fields">Exact recorded fields</h2>
+<h3 id="e000">E000</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E000&quot;,
+  &quot;timestamp&quot;: &quot;2026-08-27T17:37:06+05:30&quot;,
+  &quot;status&quot;: &quot;champion_reference&quot;,
+  &quot;seed&quot;: 42,
+  &quot;hypothesis&quot;: &quot;Full-dataset shuffling removes class-order training bias and improves fold generalization.&quot;,
+  &quot;change_summary&quot;: &quot;Historical shuffle-remediated complete five-fold development CV.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_oof_auc&quot;: 0.80414,
+    &quot;slice_oof_auc&quot;: 0.796691,
+    &quot;fold_patient_auc&quot;: [
+      0.8676,
+      0.9301,
+      0.6618,
+      0.7417,
+      0.8625
+    ]
+  },
+  &quot;secondary&quot;: {
+    &quot;best_epoch&quot;: [
+      30,
+      31,
+      1,
+      1,
+      8
+    ],
+    &quot;transfer_guard&quot;: &quot;FAIL&quot;,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;Current best verified development result; retained despite transfer-guard failure because it is the strongest research reference.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260827_173706_573400&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e001">E001</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E001&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-09T22:05:00+05:30&quot;,
+  &quot;status&quot;: &quot;infrastructure-fix&quot;,
+  &quot;seed&quot;: null,
+  &quot;hypothesis&quot;: &quot;Make smoke tests backend-neutral so the Keras torch backend's tensor conversion does not create false test failures.&quot;,
+  &quot;change_summary&quot;: &quot;Added a small test-only conversion helper and shape-based parameter counting in tests/test_smoke.py.&quot;,
+  &quot;metric&quot;: {},
+  &quot;secondary&quot;: {
+    &quot;tests_before&quot;: &quot;44 passed, 2 failed&quot;,
+    &quot;tests_after&quot;: &quot;46 passed&quot;,
+    &quot;smoke&quot;: &quot;PASS&quot;
+  },
+  &quot;reason&quot;: &quot;Correctness/infrastructure repair only; no model score or evaluator definition changed.&quot;,
+  &quot;run_dir&quot;: null,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e002">E002</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E002&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-09T22:02:28+05:30&quot;,
+  &quot;status&quot;: &quot;diagnostic-no-champion-change&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: 2,
+  &quot;hypothesis&quot;: &quot;A second seed on fold 2 will show whether the shuffle-remediated fold-2 result is stable enough to justify a full repeated-seed CV.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only fold-2 diagnostic with seed 43; original slices, frozen split, no sealed test.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_fold_auc&quot;: 0.6801470588,
+    &quot;slice_fold_auc&quot;: 0.5539936216
+  },
+  &quot;secondary&quot;: {
+    &quot;best_epoch&quot;: 1,
+    &quot;total_epochs_trained&quot;: 16,
+    &quot;slice_probability_std&quot;: 0.1198213,
+    &quot;patient_probability_std&quot;: 0.1360921,
+    &quot;site_patient_auc&quot;: {
+      &quot;FA&quot;: 0.8333333333,
+      &quot;ME&quot;: 0.5,
+      &quot;RA&quot;: 0.5757575758
+    }
+  },
+  &quot;reason&quot;: &quot;Higher than the same fold's seed-42 0.6618 but it is a single-fold probe; it cannot replace the complete-CV champion.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_220228_721000&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e003">E003</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E003&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-09T17:30:05Z&quot;,
+  &quot;status&quot;: &quot;diagnostic-no-champion-change&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: 3,
+  &quot;hypothesis&quot;: &quot;Seed 43 should reproduce the shuffle-remediated fold-3 signal if the improvement is not only a seed artifact.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only fold-3 diagnostic with seed 43; original slices, frozen split, no sealed test.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_fold_auc&quot;: 0.8666666667,
+    &quot;slice_fold_auc&quot;: 0.9134621041
+  },
+  &quot;secondary&quot;: {
+    &quot;best_epoch&quot;: 19,
+    &quot;total_epochs_trained&quot;: 34,
+    &quot;val_sample_count&quot;: 452,
+    &quot;slice_probability_std&quot;: 0.3749798529,
+    &quot;patient_probability_std&quot;: 0.3132195309,
+    &quot;site_patient_auc&quot;: {
+      &quot;FA&quot;: 0.9444444444,
+      &quot;ME&quot;: 1,
+      &quot;RA&quot;: 0.7954545455
+    },
+    &quot;same_fold_seed42_patient_auc&quot;: 0.7416666667
+  },
+  &quot;reason&quot;: &quot;A strong same-fold improvement, but the best epoch and score spread moved substantially; only a complete repeated-seed CV can test whether it generalizes.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_222112_651800&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e004">E004</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E004&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-09T20:19:44Z&quot;,
+  &quot;status&quot;: &quot;strong-candidate-pending-transfer-and-repeat&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;A complete seed-43 development CV will reproduce the promising same-fold diagnostics under the unchanged shuffle-remediated protocol.&quot;,
+  &quot;change_summary&quot;: &quot;Complete five-fold development-only CV with seed 43; frozen manifest/splits, original slices only, no sealed-test access.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_oof_auc&quot;: 0.8540315107,
+    &quot;slice_oof_auc&quot;: 0.8294524447,
+    &quot;mean_fold_patient_auc&quot;: 0.8392647059,
+    &quot;worst_fold_patient_auc&quot;: 0.6801470588
+  },
+  &quot;secondary&quot;: {
+    &quot;fold_patient_auc&quot;: [
+      0.9227941176,
+      0.8933823529,
+      0.6801470588,
+      0.8666666667,
+      0.8333333333
+    ],
+    &quot;best_epoch&quot;: [
+      34,
+      15,
+      1,
+      19,
+      7
+    ],
+    &quot;median_best_epoch&quot;: 15,
+    &quot;threshold&quot;: 0.4280699442,
+    &quot;per_site_patient_auc&quot;: {
+      &quot;FA&quot;: 0.7259259259,
+      &quot;ME&quot;: 0.90625,
+      &quot;RA&quot;: 0.8673553719
+    },
+    &quot;acceptance_passed&quot;: true,
+    &quot;elapsed_time_seconds&quot;: 10060.5206,
+    &quot;development_transfer_guard&quot;: &quot;NOT_RUN&quot;,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;Patient OOF AUC exceeds E000 by 0.0498915 and all OOF gates pass; final development transfer and robustness confirmation remain mandatory before BEST can change.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e005">E005</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E005&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T02:27:02+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-transfer-failure&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;The seed-43 candidate's strong OOF score will transfer to a locked 15-epoch final retrain on all development patients.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only final retrain for E004 median epoch 15 followed by direct development transfer guard; sealed-test evaluation was deliberately not called.&quot;,
+  &quot;metric&quot;: {
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_std&quot;: 0.1036762625,
+    &quot;ks_vs_oof&quot;: 0.7267080745,
+    &quot;oof_positive_rate&quot;: 0.4968944099,
+    &quot;development_positive_rate&quot;: 1,
+    &quot;threshold_delta&quot;: 0.5031055901
+  },
+  &quot;secondary&quot;: {
+    &quot;patient_count&quot;: 161,
+    &quot;locked_threshold&quot;: 0.4280699442,
+    &quot;training_epochs&quot;: 15,
+    &quot;final_model&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100/final/model.keras&quot;,
+    &quot;final_training_loss&quot;: 0.2151476592,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;All final-development probabilities exceeded the locked threshold; the large KS and threshold-transfer failures invalidate E004 for BEST/deployment despite its OOF improvement.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e006">E006</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E006&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T02:44:00+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-transfer-failure&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;The E004 transfer collapse is caused primarily by overtraining in the final retrain; an epoch-1 final model should preserve a transfer-stable score regime.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only one-epoch final retrain using E004's unchanged seed/config and locked OOF threshold, followed by the development transfer guard; fixed E004 OOF patient predictions were copied into the diagnostic directory after a wrapper omission; sealed-test evaluation was deliberately not called.&quot;,
+  &quot;metric&quot;: {
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_std&quot;: 0.0476219151,
+    &quot;ks_vs_oof&quot;: 0.4472049689,
+    &quot;oof_positive_rate&quot;: 0.4968944099,
+    &quot;development_positive_rate&quot;: 0.04968944099,
+    &quot;threshold_delta&quot;: 0.4472049689
+  },
+  &quot;secondary&quot;: {
+    &quot;patient_count&quot;: 161,
+    &quot;locked_threshold&quot;: 0.4280699442,
+    &quot;training_epochs&quot;: 1,
+    &quot;final_model&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e006_final_epoch1/final/model.keras&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;reference_oof_run&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100&quot;
+  },
+  &quot;reason&quot;: &quot;Epoch 1 under-collapsed toward the negative class: probability spread was too narrow, KS and threshold-transfer gates failed, and only 4.97% of development patients crossed the locked threshold. E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e006_final_epoch1&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e007">E007</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E007&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T03:04:00+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-transfer-failure&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;The E005 final-model transfer failure is caused by stale custom BatchNorm moving statistics; recalibrating only those statistics on shuffled clean development images should restore the OOF score regime without changing learned weights.&quot;,
+  &quot;change_summary&quot;: &quot;Loaded E005's fixed 15-epoch model, disabled dropout only during three shuffled clean-development calibration passes, restored dropout, saved a separate model, and ran the development transfer guard against the copied fixed E004 OOF reference; sealed-test evaluation was deliberately not called.&quot;,
+  &quot;metric&quot;: {
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_mean&quot;: 0.4494364805,
+    &quot;probability_std&quot;: 0.4336866895,
+    &quot;ks_vs_oof&quot;: 0.3229813665,
+    &quot;oof_positive_rate&quot;: 0.4968944099,
+    &quot;development_positive_rate&quot;: 0.4658385093,
+    &quot;threshold_delta&quot;: 0.0310559006
+  },
+  &quot;secondary&quot;: {
+    &quot;patient_count&quot;: 161,
+    &quot;locked_threshold&quot;: 0.4280699442,
+    &quot;calibration_passes&quot;: 3,
+    &quot;learned_weights_changed&quot;: false,
+    &quot;final_model&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e007_bn_recalibration/final/model.keras&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;reference_oof_run&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100&quot;
+  },
+  &quot;reason&quot;: &quot;BN recalibration fixed probability spread and threshold prevalence but left KS vs OOF at 0.322981 and created a bimodal score shape; candidate rejected and E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e007_bn_recalibration&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e008">E008</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E008&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T03:20:00+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-transfer-failure&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;The E007 bimodal score shape is caused by over-calibration; one shuffled clean-development BN pass should provide a less extreme, more OOF-like distribution.&quot;,
+  &quot;change_summary&quot;: &quot;Loaded the same fixed E005 15-epoch model, disabled dropout only during one shuffled clean-development calibration pass, restored dropout, saved a separate model, and reran the development transfer guard against the copied fixed E004 OOF reference; sealed-test evaluation was deliberately not called.&quot;,
+  &quot;metric&quot;: {
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_mean&quot;: 0.4584523355,
+    &quot;probability_std&quot;: 0.4352528279,
+    &quot;ks_vs_oof&quot;: 0.3167701863,
+    &quot;oof_positive_rate&quot;: 0.4968944099,
+    &quot;development_positive_rate&quot;: 0.4658385093,
+    &quot;threshold_delta&quot;: 0.0310559006
+  },
+  &quot;secondary&quot;: {
+    &quot;patient_count&quot;: 161,
+    &quot;locked_threshold&quot;: 0.4280699442,
+    &quot;calibration_passes&quot;: 1,
+    &quot;learned_weights_changed&quot;: false,
+    &quot;final_model&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e008_bn_onepass/final/model.keras&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;reference_oof_run&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100&quot;
+  },
+  &quot;reason&quot;: &quot;One-pass recalibration left KS vs OOF at 0.316770 despite passing probability-spread and threshold-transfer gates; the score-shape mismatch is not explained by calibration pass count. E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e008_bn_onepass&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e009">E009</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E009&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T03:27:00+05:30&quot;,
+  &quot;status&quot;: &quot;near-miss-ks-failure&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;An ensemble of the five E004 fold-best checkpoints will avoid the unstable all-development final retrain and transfer its probability regime more faithfully.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only inference of all original development images through each already-trained E004 fold-best checkpoint; slice probabilities were averaged arithmetically before patient-mean aggregation and compared with E004's fixed OOF distribution/threshold. No retraining, sealed-test access, or evaluator change.&quot;,
+  &quot;metric&quot;: {
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_mean&quot;: 0.4645688449,
+    &quot;probability_std&quot;: 0.3130902624,
+    &quot;ks_vs_oof&quot;: 0.1739130435,
+    &quot;oof_positive_rate&quot;: 0.4968944099,
+    &quot;development_positive_rate&quot;: 0.4782608696,
+    &quot;threshold_delta&quot;: 0.0186335404
+  },
+  &quot;secondary&quot;: {
+    &quot;patient_count&quot;: 161,
+    &quot;locked_threshold&quot;: 0.4280699442,
+    &quot;fold_count&quot;: 5,
+    &quot;ensemble&quot;: &quot;equal slice-probability mean then patient mean&quot;,
+    &quot;diagnostic_in_sample_patient_auc&quot;: 0.9911955514,
+    &quot;sealed_test_used&quot;: false,
+    &quot;source_run&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100&quot;
+  },
+  &quot;reason&quot;: &quot;Spread and threshold-transfer gates passed, but KS vs OOF was 0.173913, narrowly above the strict &lt;0.15 gate. Retain as a near-miss only; E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e009_fold_ensemble&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e010">E010</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E010&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T03:30:00+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-transfer-failure&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;Median aggregation over the same five fold-best checkpoint predictions will be more robust to fold-specific calibration outliers than the near-miss equal mean.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only inference of the same five E004 fold-best checkpoints with median slice-probability aggregation before patient mean; fixed E004 OOF distribution/threshold used for transfer gates and sealed test untouched.&quot;,
+  &quot;metric&quot;: {
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_mean&quot;: 0.4652673296,
+    &quot;probability_std&quot;: 0.3937326364,
+    &quot;ks_vs_oof&quot;: 0.2422360248,
+    &quot;oof_positive_rate&quot;: 0.4968944099,
+    &quot;development_positive_rate&quot;: 0.4720496894,
+    &quot;threshold_delta&quot;: 0.0248447205
+  },
+  &quot;secondary&quot;: {
+    &quot;patient_count&quot;: 161,
+    &quot;locked_threshold&quot;: 0.4280699442,
+    &quot;fold_count&quot;: 5,
+    &quot;ensemble&quot;: &quot;median slice probability then patient mean&quot;,
+    &quot;diagnostic_in_sample_patient_auc&quot;: 0.9952116157,
+    &quot;sealed_test_used&quot;: false,
+    &quot;source_run&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260909_230224_165100&quot;
+  },
+  &quot;reason&quot;: &quot;Median aggregation worsened KS vs OOF to 0.242236 versus the equal mean's 0.173913; E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e010_fold_ensemble_median&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e011">E011</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E011&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T03:52:00+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-not-material&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: 2,
+  &quot;hypothesis&quot;: &quot;Equalizing expected patient frequency during training will reduce the slice-count bias that may be hurting the known weak fold 2.&quot;,
+  &quot;change_summary&quot;: &quot;Single development-only fold-2 diagnostic with seed 43 and opt-in patient-balanced training sampler; frozen manifest/splits, original-only validation, unchanged model/evaluator, no sealed-test access. The sampler produced 2,125 training rows with 128 patients at equal 17-row quota and completed the normal 16-epoch early-stopping protocol.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_fold_auc&quot;: 0.6838235294,
+    &quot;slice_fold_auc&quot;: 0.5390899211,
+    &quot;same_fold_e004_patient_auc&quot;: 0.6801470588,
+    &quot;same_fold_e004_slice_auc&quot;: 0.5539936216,
+    &quot;patient_auc_delta&quot;: 0.0036764706,
+    &quot;slice_auc_delta&quot;: -0.0149037005
+  },
+  &quot;secondary&quot;: {
+    &quot;best_epoch&quot;: 1,
+    &quot;best_val_loss&quot;: 0.7063558102,
+    &quot;same_fold_e004_best_epoch&quot;: 1,
+    &quot;site_patient_auc&quot;: {
+      &quot;FA&quot;: 0.8888888889,
+      &quot;ME&quot;: 0.5,
+      &quot;RA&quot;: 0.5555555556
+    },
+    &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_033410_666100&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;full_cv_launched&quot;: false
+  },
+  &quot;reason&quot;: &quot;Patient AUC gain was tiny and accompanied by lower slice AUC; the weak-fold result does not justify a full patient-balanced CV.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_033410_666100&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e012">E012</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E012&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T03:56:00+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-non-robust-subset&quot;,
+  &quot;seed&quot;: 42,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;The seed-43 omit-fold-0/omit-fold-3 ensemble near-passes will repeat with the independent seed-42 E000 fold checkpoints, supporting a robust subset ensemble.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only inference of all original development images through existing E000 seed-42 fold-best checkpoints; audited all-five mean, omit-fold-0 mean, and omit-fold-3 mean against E000's fixed OOF distribution/threshold. No retraining, sealed-test access, or evaluator changes.&quot;,
+  &quot;metric&quot;: {
+    &quot;all_five_ks&quot;: 0.2422360248,
+    &quot;omit_fold_0_ks&quot;: 0.2360248447,
+    &quot;omit_fold_3_ks&quot;: 0.2608695652,
+    &quot;all_five_threshold_delta&quot;: 0.0621118012,
+    &quot;omit_fold_0_threshold_delta&quot;: 0.0621118012,
+    &quot;omit_fold_3_threshold_delta&quot;: 0.0559006211,
+    &quot;any_operator_passed&quot;: false
+  },
+  &quot;secondary&quot;: {
+    &quot;patient_count&quot;: 161,
+    &quot;locked_threshold&quot;: 0.4280699442,
+    &quot;source_run&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260827_173706_573400&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;diagnostic_in_sample_patient_auc&quot;: {
+      &quot;all_five&quot;: 0.99922768,
+      &quot;omit_fold_0&quot;: 0.9922768,
+      &quot;omit_fold_3&quot;: 0.999536608
+    }
+  },
+  &quot;reason&quot;: &quot;Neither subset reproduced the seed-43 near-pass; all operators failed the strict transfer gates. E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e012_seed42_ensemble_audit&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e013">E013</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E013&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T05:41:14+05:30&quot;,
+  &quot;status&quot;: &quot;interrupted-external-incomplete&quot;,
+  &quot;seed&quot;: 44,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;A complete seed-44 development CV under the unchanged canonical sampler/model/evaluator will test whether E004's OOF improvement reproduces independently.&quot;,
+  &quot;change_summary&quot;: &quot;Started complete seed-44 development-only CV with frozen manifest/splits, original slices only, unchanged canonical model/evaluator, and no sealed-test access. Fold 0 and fold 1 completed; fold 2 was interrupted mid-training. Partial fold artifacts are retained for recovery; no complete OOF metric was produced.&quot;,
+  &quot;metric&quot;: {
+    &quot;complete_cv&quot;: false,
+    &quot;patient_oof_auc&quot;: null,
+    &quot;slice_oof_auc&quot;: null,
+    &quot;completed_fold_patient_auc&quot;: {
+      &quot;0&quot;: 0.5551470588,
+      &quot;1&quot;: 0.9044117647
+    }
+  },
+  &quot;secondary&quot;: {
+    &quot;seed&quot;: 44,
+    &quot;folds_completed&quot;: [
+      0,
+      1
+    ],
+    &quot;fold_best_epoch&quot;: [
+      1,
+      14
+    ],
+    &quot;fold_total_epochs&quot;: [
+      16,
+      29
+    ],
+    &quot;partial_fold_patient_probability_std&quot;: {
+      &quot;0&quot;: 0.1240254664,
+      &quot;1&quot;: 0.3283652288
+    },
+    &quot;interruption&quot;: &quot;Windows user logoff at 2026-09-10 05:41:14 terminated the active training process; captured log ended during fold 2&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_035701_943800&quot;
+  },
+  &quot;reason&quot;: &quot;External session termination, not a model-quality or evaluator result. E000 remains BEST; E014 will recover missing folds with the same immutable experiment inputs.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_035701_943800&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e014">E014</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E014&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T17:59:29+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-no-oof-improvement&quot;,
+  &quot;seed&quot;: 44,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;Recover the missing seed-44 folds with the exact E013 configuration, frozen manifest/splits, and unchanged evaluator to determine whether the E004 OOF gain reproduces independently.&quot;,
+  &quot;change_summary&quot;: &quot;Recovered folds 2, 3, and 4 into a separate run using E013 provenance and direct train_single_fold calls; validated all five fold artifacts, then ran the canonical development-only OOF aggregation against the frozen development manifest. No sealed-test access or evaluator changes.&quot;,
+  &quot;metric&quot;: {
+    &quot;complete_cv&quot;: true,
+    &quot;patient_oof_auc&quot;: 0.8046030275,
+    &quot;slice_oof_auc&quot;: 0.7632287443,
+    &quot;mean_fold_patient_auc&quot;: 0.7885294118,
+    &quot;worst_fold_patient_auc&quot;: 0.5551470588,
+    &quot;fold_patient_auc&quot;: [
+      0.5551470588,
+      0.9044117647,
+      0.9080882353,
+      0.9083333333,
+      0.6666666667
+    ],
+    &quot;oof_acceptance_passed&quot;: true
+  },
+  &quot;secondary&quot;: {
+    &quot;seed&quot;: 44,
+    &quot;fold_best_epoch&quot;: [
+      1,
+      14,
+      57,
+      39,
+      2
+    ],
+    &quot;median_best_epoch&quot;: 14,
+    &quot;locked_threshold&quot;: 0.4039669475,
+    &quot;n_patients&quot;: 161,
+    &quot;n_oof_samples&quot;: 2796,
+    &quot;sealed_test_used&quot;: false,
+    &quot;source_interrupted_run&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_035701_943800&quot;,
+    &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e014_seed44_recovered&quot;
+  },
+  &quot;reason&quot;: &quot;Complete and reproducible, but patient OOF ROC-AUC 0.804603 is only +0.000463 over E000 and 0.049428 below E004; fold 0 remained near chance at 0.555147. E000 remains BEST and no final retrain was spent on this non-champion.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e014_seed44_recovered&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e015">E015</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E015&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T18:06:00+05:30&quot;,
+  &quot;status&quot;: &quot;near-miss-transfer-ks-failure&quot;,
+  &quot;seed&quot;: null,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;A leakage-free arithmetic ensemble of corresponding E004 seed-43 and E014 seed-44 fold-best checkpoints will reduce seed-specific fold failures and improve OOF generalization.&quot;,
+  &quot;change_summary&quot;: &quot;Averaged corresponding out-of-fold slice probabilities from the two complete canonical CVs, validated prediction identity against the frozen manifest, applied the unchanged patient-mean evaluator, and ran a development-only transfer guard using all ten existing fold-best checkpoints. No retraining, sealed-test access, or evaluator change.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_oof_auc&quot;: 0.8714859438,
+    &quot;slice_oof_auc&quot;: 0.8393989314,
+    &quot;mean_fold_patient_auc&quot;: 0.8794607843,
+    &quot;worst_fold_patient_auc&quot;: 0.8125,
+    &quot;fold_patient_auc&quot;: [
+      0.8713235294,
+      0.9154411765,
+      0.8897058824,
+      0.9083333333,
+      0.8125
+    ],
+    &quot;oof_acceptance_passed&quot;: true,
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_std&quot;: 0.2906211264,
+    &quot;ks_vs_oof&quot;: 0.1801242236,
+    &quot;threshold_delta&quot;: 0.0124223602
+  },
+  &quot;secondary&quot;: {
+    &quot;source_experiments&quot;: [
+      &quot;E004&quot;,
+      &quot;E014&quot;
+    ],
+    &quot;locked_threshold&quot;: 0.4571234673,
+    &quot;oof_positive_rate&quot;: 0.4906832298,
+    &quot;development_positive_rate&quot;: 0.4782608696,
+    &quot;diagnostic_in_sample_patient_auc&quot;: 0.9987642879,
+    &quot;n_patients&quot;: 161,
+    &quot;n_oof_samples&quot;: 2796,
+    &quot;fold_count&quot;: 10,
+    &quot;sealed_test_used&quot;: false,
+    &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e015_seed43_44_oof_ensemble&quot;
+  },
+  &quot;reason&quot;: &quot;The cross-seed ensemble materially improves OOF AUC and all OOF gates, and passes probability-spread and threshold-transfer guards, but KS vs OOF is 0.180124 &gt; 0.15. Retain as a research near-miss; E000 remains BEST pending a pre-declared blend/robustness verification.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e015_seed43_44_oof_ensemble&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e016">E016</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E016&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T18:22:30+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-no-transfer-safe-blend&quot;,
+  &quot;seed&quot;: null,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;A fixed coarse convex blend of the complementary E004/E014 seed ensembles may contain a transfer-safe operating point without retraining.&quot;,
+  &quot;change_summary&quot;: &quot;Evaluated the pre-declared weights E004={0.0,0.1,...,1.0} and E014=1-E004 using fixed OOF predictions and the corresponding ten-checkpoint development predictions; recomputed patient OOF AUC, worst-fold AUC, locked threshold, and all transfer gates for every weight. No labels or sealed-test data were added and no evaluator was changed.&quot;,
+  &quot;metric&quot;: {
+    &quot;weights_tested&quot;: [
+      0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1
+    ],
+    &quot;best_oof_patient_auc&quot;: 0.8775102887,
+    &quot;best_oof_weight_e004&quot;: 0.6,
+    &quot;minimum_ks_vs_oof&quot;: 0.1677018634,
+    &quot;minimum_ks_weight_e004&quot;: 0,
+    &quot;any_transfer_gates_passed&quot;: false
+  },
+  &quot;secondary&quot;: {
+    &quot;best_oof_worst_fold_patient_auc&quot;: 0.825,
+    &quot;best_oof_slice_auc&quot;: 0.844893,
+    &quot;all_weights_threshold_delta_max&quot;: 0.0372670807,
+    &quot;artifact&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e015_seed43_44_oof_ensemble/blend_weight_grid.json&quot;,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;No convex blend on the pre-declared grid met the strict KS &lt; 0.15 transfer gate; the OOF gain alone is insufficient for promotion.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e015_seed43_44_oof_ensemble&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e017">E017</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E017&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T19:56:38+05:30&quot;,
+  &quot;status&quot;: &quot;promising-fold-replication-required&quot;,
+  &quot;seed&quot;: 44,
+  &quot;fold&quot;: 0,
+  &quot;hypothesis&quot;: &quot;Selecting/early-stopping fold checkpoints on the primary patient-level validation AUC instead of slice-level val_loss will rescue seed-44 fold-0's selection failure without changing data, model, optimizer, or augmentation.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only fold-0 seed-44 diagnostic with the canonical train/validation rows, model, optimizer, full-dataset shuffle, augmentation, and 60-epoch maximum. The only intervention was a patient-mean validation ROC-AUC checkpoint/early-stop callback; val-loss learning-rate reduction remained unchanged. No sealed-test access or evaluator change.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_fold_auc&quot;: 0.8161764706,
+    &quot;slice_fold_auc&quot;: 0.7807092472,
+    &quot;canonical_e014_patient_fold_auc&quot;: 0.5551470588,
+    &quot;patient_auc_delta&quot;: 0.2610294118,
+    &quot;canonical_e014_slice_fold_auc&quot;: 0.3894093686
+  },
+  &quot;secondary&quot;: {
+    &quot;best_epoch&quot;: 26,
+    &quot;best_patient_val_auc&quot;: 0.8161764706,
+    &quot;total_epochs_trained&quot;: 41,
+    &quot;best_val_loss_in_history&quot;: 0.6647652984,
+    &quot;val_samples&quot;: 555,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;The aligned selector materially rescues the same weak fold, but a full-CV candidate requires an independent weak-fold replication before promotion or broader implementation.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e017_fold0_patient_auc_selector_seed44&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e018">E018</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E018&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-10T20:53:32+05:30&quot;,
+  &quot;status&quot;: &quot;promising-replication&quot;,
+  &quot;seed&quot;: 44,
+  &quot;fold&quot;: 4,
+  &quot;hypothesis&quot;: &quot;The patient-level validation-AUC checkpoint/early-stop selector will replicate on seed-44 fold 4, independently confirming that E017 was not a fold-0-specific artifact.&quot;,
+  &quot;change_summary&quot;: &quot;Development-only fold-4 seed-44 diagnostic with the same canonical data, model, optimizer, shuffle, augmentation, and frozen split as E014; only checkpoint/early-stop selection changed to patient-mean validation ROC-AUC, with val-loss learning-rate reduction unchanged. No sealed-test access or evaluator change.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_fold_auc&quot;: 0.8541666667,
+    &quot;slice_fold_auc&quot;: 0.6867628011,
+    &quot;canonical_e014_patient_fold_auc&quot;: 0.6666666667,
+    &quot;patient_auc_delta&quot;: 0.1875,
+    &quot;canonical_e014_slice_fold_auc&quot;: 0.5183783784
+  },
+  &quot;secondary&quot;: {
+    &quot;best_epoch&quot;: 13,
+    &quot;best_patient_val_auc&quot;: 0.8541666667,
+    &quot;total_epochs_trained&quot;: 28,
+    &quot;best_val_loss_in_history&quot;: 0.6801661849,
+    &quot;val_samples&quot;: 498,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;The selector improves an independent weak fold by 0.1875 patient AUC, supporting a complete patient-AUC-selected seed-44 CV. It is not yet a complete candidate or BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e018_fold4_patient_auc_selector_seed44&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e019">E019</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E019&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T01:42:45+05:30&quot;,
+  &quot;status&quot;: &quot;oof-improvement-transfer-pending&quot;,
+  &quot;seed&quot;: 44,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;Applying patient-level validation ROC-AUC checkpointing and early stopping across a complete seed-44 CV will improve the weak-fold selections and raise leakage-free patient OOF performance without changing data, model, optimizer, augmentation, or frozen splits.&quot;,
+  &quot;change_summary&quot;: &quot;Reused the verified E017/E018 fold-0/fold-4 artifacts and trained folds 1-3 with the same canonical configuration plus the patient-level validation-AUC selector. Ran the unchanged canonical OOF aggregation against all 2,796 development rows and 161 patients. No sealed-test access, evaluator changes, or split regeneration.&quot;,
+  &quot;metric&quot;: {
+    &quot;complete_cv&quot;: true,
+    &quot;patient_oof_auc&quot;: 0.8344145814,
+    &quot;slice_oof_auc&quot;: 0.7687566476,
+    &quot;mean_fold_patient_auc&quot;: 0.8774019608,
+    &quot;worst_fold_patient_auc&quot;: 0.8161764706,
+    &quot;fold_patient_auc&quot;: [
+      0.8161764706,
+      0.9411764706,
+      0.8713235294,
+      0.9041666667,
+      0.8541666667
+    ],
+    &quot;oof_acceptance_passed&quot;: true
+  },
+  &quot;secondary&quot;: {
+    &quot;seed&quot;: 44,
+    &quot;fold_best_epoch&quot;: [
+      26,
+      29,
+      23,
+      44,
+      13
+    ],
+    &quot;median_best_epoch&quot;: 26,
+    &quot;locked_threshold&quot;: 0.4279403239,
+    &quot;n_patients&quot;: 161,
+    &quot;n_oof_samples&quot;: 2796,
+    &quot;sealed_test_used&quot;: false,
+    &quot;per_site_patient_auc&quot;: {
+      &quot;FA&quot;: 0.8074074074,
+      &quot;ME&quot;: 0.75,
+      &quot;RA&quot;: 0.8297520661
+    },
+    &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e019_seed44_patient_auc_cv&quot;
+  },
+  &quot;reason&quot;: &quot;Patient OOF AUC improves E000 by 0.030275 and all canonical OOF gates pass, with the worst fold rising to 0.816176. Transfer verification is still required; E000 remains BEST until development-distribution gates, robustness, and final verification pass.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e019_seed44_patient_auc_cv&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e020">E020</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E020&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T01:59:57+05:30&quot;,
+  &quot;status&quot;: &quot;near-miss-transfer-ks-failure&quot;,
+  &quot;seed&quot;: 44,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;An equal-mean ensemble of all five E019 patient-AUC-selected fold-best checkpoints will transfer the improved OOF score regime to the complete development population without collapse.&quot;,
+  &quot;change_summary&quot;: &quot;Loaded each E019 fold-best checkpoint, predicted every original development image from the frozen source tree, averaged slice probabilities, aggregated by patient, and applied the unchanged development transfer guard against E019's frozen OOF patient predictions. No retraining, labels, split changes, evaluator changes, or sealed-test access.&quot;,
+  &quot;metric&quot;: {
+    &quot;probability_mean&quot;: 0.5045654878,
+    &quot;probability_std&quot;: 0.3707863013,
+    &quot;ks_vs_oof&quot;: 0.1677018634,
+    &quot;locked_threshold&quot;: 0.4279403239,
+    &quot;oof_positive_rate&quot;: 0.5279503106,
+    &quot;development_positive_rate&quot;: 0.4844720497,
+    &quot;threshold_delta&quot;: 0.0434782609,
+    &quot;development_transfer_gates_passed&quot;: false
+  },
+  &quot;secondary&quot;: {
+    &quot;n_patients&quot;: 161,
+    &quot;n_development_slices&quot;: 2796,
+    &quot;prob_std_gate_passed&quot;: true,
+    &quot;ks_gate_passed&quot;: false,
+    &quot;threshold_gate_passed&quot;: true,
+    &quot;ensemble&quot;: &quot;equal_mean_of_five_e019_fold_best_checkpoints&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;artifact&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e019_seed44_patient_auc_cv/final_ensemble_transfer/development_transfer.json&quot;
+  },
+  &quot;reason&quot;: &quot;The E019 ensemble preserves adequate score spread and threshold prevalence, but KS vs OOF is 0.167702 &gt; 0.15. The OOF improvement is not yet a transfer-safe or deployable improvement; E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260910_e019_seed44_patient_auc_cv/final_ensemble_transfer&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e021">E021</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E021&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T03:08:18+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-final-retrain-ks-failure&quot;,
+  &quot;seed&quot;: 44,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;Retraining one model from scratch on all development images for the E019 locked median epoch budget (26) will preserve the patient-AUC-selected CV score regime and pass the development transfer guard.&quot;,
+  &quot;change_summary&quot;: &quot;Copied E019 provenance and frozen OOF reference predictions into a new run, trained the canonical full-development model for exactly 26 epochs using only original development images and the existing augmentation/data pipeline, then ran only evaluate_development_transfer. The sealed test was not loaded and the CLI finalize path was not used.&quot;,
+  &quot;metric&quot;: {
+    &quot;final_epochs&quot;: 26,
+    &quot;probability_mean&quot;: 0.6050620558,
+    &quot;probability_std&quot;: 0.3901087804,
+    &quot;ks_vs_oof&quot;: 0.3788819876,
+    &quot;locked_threshold&quot;: 0.4279403239,
+    &quot;oof_positive_rate&quot;: 0.5279503106,
+    &quot;development_positive_rate&quot;: 0.5527950311,
+    &quot;threshold_delta&quot;: 0.0248447205,
+    &quot;development_transfer_gates_passed&quot;: false
+  },
+  &quot;secondary&quot;: {
+    &quot;n_patients&quot;: 161,
+    &quot;prob_std_gate_passed&quot;: true,
+    &quot;ks_gate_passed&quot;: false,
+    &quot;threshold_gate_passed&quot;: true,
+    &quot;sealed_test_used&quot;: false,
+    &quot;model_path&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e021_seed44_final_epoch26_transfer/final/model.keras&quot;,
+    &quot;artifact&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e021_seed44_final_epoch26_transfer/e021_summary.json&quot;
+  },
+  &quot;reason&quot;: &quot;The exact-26-epoch full-development retrain passes score spread and threshold prevalence but has KS 0.378882 &gt; 0.15, confirming that the patient-AUC CV improvement does not transfer through the current single-model final-training protocol. E000 remains BEST.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e021_seed44_final_epoch26_transfer&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e022">E022</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E022&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T04:38:47+05:30&quot;,
+  &quot;status&quot;: &quot;independent-seed-replication-positive&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: 2,
+  &quot;hypothesis&quot;: &quot;The patient-level validation-AUC selector will improve the independently seeded E004 fold 2, showing that E019's weak-fold rescue is not specific to seed 44.&quot;,
+  &quot;change_summary&quot;: &quot;Trained seed-43 fold 2 with the canonical data/model/optimizer/full shuffle/augmentation and frozen fold, changing only checkpoint and early-stop selection to patient-mean validation ROC-AUC. No sealed-test access or evaluator change.&quot;,
+  &quot;metric&quot;: {
+    &quot;patient_fold_auc&quot;: 0.8639705882,
+    &quot;canonical_e004_patient_fold_auc&quot;: 0.6801470588,
+    &quot;patient_auc_delta&quot;: 0.1838235294
+  },
+  &quot;secondary&quot;: {
+    &quot;best_epoch&quot;: 26,
+    &quot;best_patient_val_auc&quot;: 0.8639705882,
+    &quot;total_epochs_trained&quot;: 41,
+    &quot;best_val_loss_in_history&quot;: 0.7142344713,
+    &quot;val_samples&quot;: 671,
+    &quot;seed&quot;: 43,
+    &quot;fold&quot;: 2,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;The selector improves the independent seed-43 weak fold by 0.183824 patient AUC over E004. Slice-level AUC was not required for this fold-gate decision and is omitted rather than inferred; complete seed-43 CV is now justified before any promotion.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e022_seed43_patient_auc_fold2&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e023">E023</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E023&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T10:36:25+05:30&quot;,
+  &quot;status&quot;: &quot;promoted-best-development-transfer-safe&quot;,
+  &quot;seed&quot;: 43,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;Patient-level validation ROC-AUC checkpointing and early stopping will generalize to an independent seed-43 complete CV and yield a transfer-safe fold-checkpoint ensemble.&quot;,
+  &quot;change_summary&quot;: &quot;Completed seed-43 patient-AUC-selected five-fold CV with E022 fold-2 artifact reused and E023 folds 0, 1, 3, and 4 trained using frozen original-only development folds; aggregated canonical OOF and evaluated an equal-mean ensemble of all five fold-best checkpoints on original development images. No split/evaluator changes, sealed-test access, or finalize path.&quot;,
+  &quot;metric&quot;: {
+    &quot;complete_cv&quot;: true,
+    &quot;patient_oof_auc&quot;: 0.8534136546,
+    &quot;slice_oof_auc&quot;: 0.8140357018,
+    &quot;mean_fold_patient_auc&quot;: 0.9144607843,
+    &quot;worst_fold_patient_auc&quot;: 0.8639705882,
+    &quot;fold_patient_auc&quot;: [
+      0.9375,
+      0.9375,
+      0.8639705882,
+      0.9125,
+      0.9208333333
+    ],
+    &quot;oof_acceptance_passed&quot;: true,
+    &quot;development_transfer_gates_passed&quot;: true,
+    &quot;probability_std&quot;: 0.3730257534,
+    &quot;ks_vs_oof&quot;: 0.1304347826,
+    &quot;locked_threshold&quot;: 0.4531617227,
+    &quot;threshold_delta&quot;: 0.0621118012
+  },
+  &quot;secondary&quot;: {
+    &quot;seed&quot;: 43,
+    &quot;fold_best_epoch&quot;: [
+      23,
+      16,
+      26,
+      25,
+      29
+    ],
+    &quot;median_best_epoch&quot;: 25,
+    &quot;n_patients&quot;: 161,
+    &quot;n_oof_samples&quot;: 2796,
+    &quot;per_site_patient_auc&quot;: {
+      &quot;FA&quot;: 0.7827160494,
+      &quot;ME&quot;: 0.8125,
+      &quot;RA&quot;: 0.8690082645
+    },
+    &quot;tests&quot;: &quot;47 passed&quot;,
+    &quot;cli_smoke&quot;: &quot;PASS&quot;,
+    &quot;repeat_evidence&quot;: &quot;E019 independent seed-44 patient-AUC selector CV improved OOF to 0.834415 but failed transfer KS; E023 is the first patient-AUC-selected candidate passing all three transfer gates&quot;,
+    &quot;sealed_test_used&quot;: false,
+    &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv&quot;,
+    &quot;transfer_artifact&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv/final_ensemble_transfer/development_transfer.json&quot;
+  },
+  &quot;reason&quot;: &quot;E023 exceeds E000 by 0.049274 patient OOF ROC-AUC, passes all canonical OOF gates, passes the unchanged development transfer guard (std 0.373026, KS 0.130435, threshold delta 0.062112), and passes 47 tests plus CLI smoke. It replaces E000 as BEST development candidate; sealed test remains permanently untouched.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e023_seed43_patient_auc_cv&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e024">E024</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E024&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T10:42:00+05:30&quot;,
+  &quot;status&quot;: &quot;discarded-transfer-ks-failure&quot;,
+  &quot;seed&quot;: null,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;Averaging the independently seeded E019 and E023 patient-AUC-selected fold ensembles will improve OOF performance while preserving the transfer-safe score distribution.&quot;,
+  &quot;change_summary&quot;: &quot;Averaged aligned E019 seed-44 and E023 seed-43 original-only OOF predictions and their development transfer patient predictions using a fixed equal blend. Verified frozen path/patient identity, canonical OOF integrity, and unchanged transfer gates; no retraining, split changes, evaluator changes, or sealed-test access.&quot;,
+  &quot;metric&quot;: {
+    &quot;complete_cv&quot;: true,
+    &quot;patient_oof_auc&quot;: 0.8561940068,
+    &quot;slice_oof_auc&quot;: 0.8019110841,
+    &quot;mean_fold_patient_auc&quot;: 0.9009313725,
+    &quot;worst_fold_patient_auc&quot;: 0.8639705882,
+    &quot;fold_patient_auc&quot;: [
+      0.8639705882,
+      0.9448529412,
+      0.875,
+      0.9083333333,
+      0.9125
+    ],
+    &quot;oof_acceptance_passed&quot;: true,
+    &quot;development_transfer_gates_passed&quot;: false,
+    &quot;probability_std&quot;: 0.3711073782,
+    &quot;ks_vs_oof&quot;: 0.1925465839,
+    &quot;locked_threshold&quot;: 0.4611732697,
+    &quot;threshold_delta&quot;: 0.0062111801
+  },
+  &quot;secondary&quot;: {
+    &quot;n_patients&quot;: 161,
+    &quot;n_oof_samples&quot;: 2796,
+    &quot;ensemble&quot;: &quot;equal_mean_of_e019_and_e023_fold_best_ensembles&quot;,
+    &quot;prob_std_gate_passed&quot;: true,
+    &quot;ks_gate_passed&quot;: false,
+    &quot;threshold_gate_passed&quot;: true,
+    &quot;sealed_test_used&quot;: false,
+    &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e024_cross_seed_selector_ensemble&quot;,
+    &quot;implementation_retry&quot;: true
+  },
+  &quot;reason&quot;: &quot;The equal cross-seed blend raises OOF patient AUC by 0.002780 over E023, but its development transfer KS is 0.192547 &gt; 0.15. E023 remains the transfer-safe BEST candidate.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e024_cross_seed_selector_ensemble&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e025">E025</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E025&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T10:44:00+05:30&quot;,
+  &quot;status&quot;: &quot;no_transfer_safe_gain&quot;,
+  &quot;seed&quot;: null,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;A predeclared E019 weight grid will identify a transfer-safe cross-seed blend that improves on E023 without opportunistic weight selection.&quot;,
+  &quot;change_summary&quot;: &quot;Evaluated E019 weights 0.00, 0.05, ..., 1.00 against aligned original-only OOF predictions and development transfer predictions. Every weight was evaluated with the unchanged OOF acceptance and transfer gates; no retraining, label/split/evaluator changes, or sealed-test access.&quot;,
+  &quot;metric&quot;: {
+    &quot;grid_weights&quot;: &quot;0.00..1.00 step 0.05&quot;,
+    &quot;eligible_weights&quot;: [
+      0,
+      0.05,
+      0.15
+    ],
+    &quot;selected_weight_e019&quot;: 0,
+    &quot;selected_weight_e023&quot;: 1,
+    &quot;selected_patient_oof_auc&quot;: 0.8534136546,
+    &quot;best_transfer_safe_patient_oof_auc&quot;: 0.8534136546,
+    &quot;equal_blend_patient_oof_auc&quot;: 0.8561940068,
+    &quot;equal_blend_ks_vs_oof&quot;: 0.1925465839,
+    &quot;selected_ks_vs_oof&quot;: 0.1304347826,
+    &quot;selected_threshold_delta&quot;: 0.0621118012,
+    &quot;selected_development_transfer_gates_passed&quot;: true
+  },
+  &quot;secondary&quot;: {
+    &quot;n_grid_points&quot;: 21,
+    &quot;n_patients&quot;: 161,
+    &quot;sealed_test_used&quot;: false,
+    &quot;grid_artifact&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e025_cross_seed_blend_grid/blend_weight_grid.json&quot;,
+    &quot;implementation_retry&quot;: false
+  },
+  &quot;reason&quot;: &quot;The only transfer-safe grid points were E019 weights 0.00, 0.05, and 0.15; all scored below E023, so E023 remains BEST and the fixed blend direction is closed for now.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e025_cross_seed_blend_grid&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+<h3 id="e026">E026</h3>
+<pre><code class="language-json">{
+  &quot;experiment_id&quot;: &quot;E026&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-11T10:47:00+05:30&quot;,
+  &quot;status&quot;: &quot;robustness-audit-passed-with-small-site-uncertainty&quot;,
+  &quot;seed&quot;: null,
+  &quot;fold&quot;: null,
+  &quot;hypothesis&quot;: &quot;The E023 candidate's gain is not confined to one acquisition site or patient slice-count stratum, and its operating-point improvement remains visible under subgroup auditing.&quot;,
+  &quot;change_summary&quot;: &quot;Read-only comparison of E000 and E023 patient-level OOF artifacts across sites FA/ME/RA and fixed original-slice-count bins 1-10, 11-20, 21-30, and 31+. No retraining, labels/split/evaluator changes, or sealed-test access.&quot;,
+  &quot;metric&quot;: {
+    &quot;candidate_patient_oof_auc&quot;: 0.8534136546,
+    &quot;baseline_patient_oof_auc&quot;: 0.8041396355,
+    &quot;overall_delta&quot;: 0.0492740192,
+    &quot;candidate_sensitivity&quot;: 0.7051282051,
+    &quot;baseline_sensitivity&quot;: 0.6538461538,
+    &quot;candidate_specificity&quot;: 0.8915662651,
+    &quot;baseline_specificity&quot;: 0.8192771084,
+    &quot;site_auc&quot;: {
+      &quot;FA&quot;: {
+        &quot;baseline&quot;: 0.7333333333,
+        &quot;candidate&quot;: 0.7827160494
+      },
+      &quot;ME&quot;: {
+        &quot;baseline&quot;: 0.8854166667,
+        &quot;candidate&quot;: 0.8125
+      },
+      &quot;RA&quot;: {
+        &quot;baseline&quot;: 0.788843,
+        &quot;candidate&quot;: 0.8690082645
+      }
+    },
+    &quot;slice_bin_artifact&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e026_e023_robustness_audit/robustness_audit.json&quot;
+  },
+  &quot;secondary&quot;: {
+    &quot;n_patients&quot;: 161,
+    &quot;score_shift_mean&quot;: 0.0042332263,
+    &quot;score_shift_mean_absolute&quot;: 0.2404477274,
+    &quot;sealed_test_used&quot;: false
+  },
+  &quot;reason&quot;: &quot;E023 improves overall OOF AUC, sensitivity, specificity, FA AUC, and RA AUC. ME AUC is lower on only 20 patients, so this is retained as a small-sample uncertainty rather than a correctness regression; no site-specific tuning is justified.&quot;,
+  &quot;run_dir&quot;: &quot;D:/Documents/Desktop/kidney stone detection-isolated/runs/20260911_e026_e023_robustness_audit&quot;,
+  &quot;commit&quot;: &quot;68b0c8d+dirty-isolated&quot;
+}
+</code></pre>
+</body>
+</html>

@@ -22,14 +22,14 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
 def save_config(config: Dict[str, Any], save_path: str) -> None:
     """Save dictionary to YAML file."""
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
     with open(save_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 
 def save_json(data: Any, save_path: str, indent: int = 2) -> None:
     """Save serializable data to JSON file."""
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=indent)
 
@@ -43,11 +43,23 @@ def load_json(path: str) -> Any:
 
 
 def set_seed(seed: int = 42) -> None:
-    """Set random seeds for Python, NumPy, and TensorFlow."""
+    """Set random seeds for Python, NumPy, TensorFlow, and the active Keras backend (torch)."""
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
     np.random.seed(seed)
     tf.random.set_seed(seed)
+    try:
+        import keras
+        keras.utils.set_random_seed(seed)
+    except Exception:
+        pass
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except Exception:
+        pass
 
 
 def compute_sha256(file_path: str, block_size: int = 65536) -> str:
@@ -81,7 +93,16 @@ def get_git_info() -> Dict[str, Any]:
 
 
 def get_gpu_info() -> str:
-    """Get GPU device name or CPU description."""
+    """Get GPU device name, probing the active Keras/torch backend before TF."""
+    try:
+        backend = os.environ.get("KERAS_BACKEND", "")
+        if backend == "torch":
+            import torch
+            if torch.cuda.is_available():
+                return torch.cuda.get_device_name(0)
+            return "CPU"
+    except Exception:
+        pass
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
         details = []
@@ -96,8 +117,8 @@ def get_gpu_info() -> str:
 
 
 def generate_run_id() -> str:
-    """Generate timestamp-based unique run identifier."""
-    return time.strftime("%Y%m%d_%H%M%S")
+    """Generate a timestamp-based run identifier with sub-second uniqueness."""
+    return f"{time.strftime('%Y%m%d_%H%M%S')}_{time.time_ns() % 1_000_000:06d}"
 
 
 def get_metadata(
@@ -108,10 +129,11 @@ def get_metadata(
     outer_split_hash: Optional[str] = None,
     cv_fold_hash: Optional[str] = None,
     elapsed_time_sec: Optional[float] = None,
+    resolved_config_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Generate run metadata dictionary matching spec section 10."""
     git_info = get_git_info()
-    return {
+    metadata = {
         "run_id": run_id,
         "command": command,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
@@ -125,19 +147,49 @@ def get_metadata(
         "outer_split_hash": outer_split_hash or "none",
         "cv_fold_hash": cv_fold_hash or "none",
         "elapsed_time_seconds": elapsed_time_sec,
+        "resolved_config_hash": resolved_config_hash or "none",
+        "keras_backend": os.environ.get("KERAS_BACKEND", "default"),
     }
+    try:
+        import keras
+        metadata["keras_version"] = keras.__version__
+    except Exception:
+        metadata["keras_version"] = "unknown"
+    try:
+        import torch
+        metadata["torch_version"] = torch.__version__
+    except Exception:
+        metadata["torch_version"] = "not-installed"
+    return metadata
 
 
 def configure_mixed_precision(policy: str = "auto") -> None:
-    """Configure TensorFlow mixed precision if requested and available."""
-    if policy == "auto":
-        gpus = tf.config.list_physical_devices("GPU")
-        if gpus:
+    """Configure mixed precision based on the backend actually in use."""
+    import keras
+
+    def _backend_sees_gpu() -> bool:
+        backend = os.environ.get("KERAS_BACKEND", "")
+        if backend == "torch":
             try:
-                tf.keras.mixed_precision.set_global_policy("mixed_float16")
+                import torch
+                return bool(torch.cuda.is_available())
+            except Exception:
+                return False
+        return len(tf.config.list_physical_devices("GPU")) > 0
+
+    if policy == "auto":
+        if _backend_sees_gpu():
+            try:
+                keras.mixed_precision.set_dtype_policy("mixed_float16")
             except Exception:
                 pass
-    elif policy == "mixed_float16":
-        tf.keras.mixed_precision.set_global_policy("mixed_float16")
+    elif policy in ["mixed_float16", "mixed_bfloat16"]:
+        try:
+            keras.mixed_precision.set_dtype_policy(policy)
+        except Exception:
+            pass
     elif policy in ["float32", "none", "off"]:
-        tf.keras.mixed_precision.set_global_policy("float32")
+        try:
+            keras.mixed_precision.set_dtype_policy("float32")
+        except Exception:
+            pass

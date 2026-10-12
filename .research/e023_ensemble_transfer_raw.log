@@ -1,0 +1,39 @@
+2026-09-11 10:21:43.665109: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-11 10:21:46.203742: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-11 10:21:52.928739: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+{
+  "patient_level": true,
+  "ensemble": "equal_mean_of_five_fold_best_checkpoints",
+  "n_patients": 161,
+  "n_development_slices": 2796,
+  "probability_mean": 0.41612999257567995,
+  "probability_std": 0.3730257533699467,
+  "ks_vs_oof": 0.13043478260869565,
+  "locked_threshold": 0.4531617226699987,
+  "gates": {
+    "prob_std": {
+      "value": 0.3730257533699467,
+      "passed": true
+    },
+    "ks_vs_oof": {
+      "value": 0.13043478260869565,
+      "passed": true
+    },
+    "threshold_transfer": {
+      "oof_pos_rate": 0.40372670807453415,
+      "development_pos_rate": 0.4658385093167702,
+      "delta": 0.06211180124223603,
+      "passed": true
+    }
+  },
+  "gates_passed": true,
+  "sealed_test_used": false,
+  "model_paths": [
+    "runs\\20260911_e023_seed43_patient_auc_cv\\fold_0\\best.keras",
+    "runs\\20260911_e023_seed43_patient_auc_cv\\fold_1\\best.keras",
+    "runs\\20260911_e023_seed43_patient_auc_cv\\fold_2\\best.keras",
+    "runs\\20260911_e023_seed43_patient_auc_cv\\fold_3\\best.keras",
+    "runs\\20260911_e023_seed43_patient_auc_cv\\fold_4\\best.keras"
+  ]
+}

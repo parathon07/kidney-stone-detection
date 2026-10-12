@@ -3,16 +3,22 @@ import shutil
 import tempfile
 import numpy as np
 import tensorflow as tf
+import keras
 import pytest
 
 from src.utils import load_config
-from src.model import build_model
+from src.model import Fp16BatchNorm, build_model
 from src.evaluate import compute_metrics_at_threshold, find_youden_j_threshold
 
 
 @pytest.fixture
 def default_config():
     return load_config("configs/default.yaml")
+
+
+def _to_numpy(value):
+    """Convert Keras backend tensors, including CUDA torch tensors, to NumPy."""
+    return np.asarray(keras.ops.convert_to_numpy(value))
 
 
 def test_model_architecture_and_contract(default_config):
@@ -26,7 +32,7 @@ def test_model_architecture_and_contract(default_config):
     
     # Forward pass on random batch of 2
     dummy_input = tf.random.normal((2, 384, 384, 1))
-    preds = model(dummy_input, training=False).numpy()
+    preds = _to_numpy(model(dummy_input, training=False))
 
     assert preds.shape == (2, 2), f"Expected shape (2, 2), got {preds.shape}"
     assert np.all(np.isfinite(preds)), "All prediction outputs must be finite"
@@ -37,7 +43,7 @@ def test_model_architecture_and_contract(default_config):
     # Parameter count verification
     total_params = model.count_params()
     # Number of trainable weights
-    trainable_params = sum([tf.size(w).numpy() for w in model.trainable_weights])
+    trainable_params = sum(int(np.prod(w.shape)) for w in model.trainable_weights)
     
     assert total_params == 4788866, f"Expected 4,788,866 total params, got {total_params}"
     assert trainable_params == 4785026, f"Expected 4,785,026 trainable params, got {trainable_params}"
@@ -68,6 +74,42 @@ def test_metric_correctness():
     assert np.isclose(metrics["precision"], 2.0 / 3.0)
     # Balanced Accuracy = 2 / 3
     assert np.isclose(metrics["balanced_accuracy"], 2.0 / 3.0)
+
+
+def test_fp16_batch_norm_updates_moving_statistics():
+    """Regression test for the mixed-precision moving-statistics bug."""
+    keras.mixed_precision.set_dtype_policy("mixed_float16")
+    try:
+        layer = Fp16BatchNorm()
+        inputs = keras.random.normal((4, 8, 8, 3))
+        layer(inputs, training=True)
+
+        assert not np.allclose(np.asarray(layer.moving_mean), 0.0)
+        assert not np.allclose(np.asarray(layer.moving_variance), 1.0)
+        assert layer.moving_mean.dtype == "float32"
+        assert layer.moving_variance.dtype == "float32"
+    finally:
+        keras.mixed_precision.set_dtype_policy("float32")
+
+
+def test_fp16_batch_norm_matches_stock_batch_norm_math():
+    """Compare training and inference behavior with stock BatchNormalization."""
+    keras.mixed_precision.set_dtype_policy("float32")
+    stock = keras.layers.BatchNormalization(momentum=0.99, epsilon=1e-3)
+    custom = Fp16BatchNorm(momentum=0.99, epsilon=1e-3)
+    inputs = tf.random.normal((4, 8, 8, 3), seed=17)
+
+    stock_training = stock(inputs, training=True)
+    custom_training = custom(inputs, training=True)
+    assert np.allclose(_to_numpy(stock_training), _to_numpy(custom_training), atol=1e-5)
+    assert np.allclose(_to_numpy(stock.moving_mean), _to_numpy(custom.moving_mean), atol=1e-6)
+    assert np.allclose(
+        _to_numpy(stock.moving_variance), _to_numpy(custom.moving_variance), atol=1e-6
+    )
+
+    stock_inference = stock(inputs, training=False)
+    custom_inference = custom(inputs, training=False)
+    assert np.allclose(_to_numpy(stock_inference), _to_numpy(custom_inference), atol=1e-5)
 
 
 def test_youden_j_threshold_selection():

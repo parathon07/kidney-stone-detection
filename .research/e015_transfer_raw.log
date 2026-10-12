@@ -1,0 +1,54 @@
+2026-09-10 18:05:51.441098: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 18:05:53.545212: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-09-10 18:06:00.013282: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+PREDICTING E004 fold 0
+PREDICTED E004 fold 0
+PREDICTING E004 fold 1
+PREDICTED E004 fold 1
+PREDICTING E004 fold 2
+PREDICTED E004 fold 2
+PREDICTING E004 fold 3
+PREDICTED E004 fold 3
+PREDICTING E004 fold 4
+PREDICTED E004 fold 4
+PREDICTING E014 fold 0
+PREDICTED E014 fold 0
+PREDICTING E014 fold 1
+PREDICTED E014 fold 1
+PREDICTING E014 fold 2
+PREDICTED E014 fold 2
+PREDICTING E014 fold 3
+PREDICTED E014 fold 3
+PREDICTING E014 fold 4
+PREDICTED E014 fold 4
+E015_TRANSFER_RESULT
+{
+  "patient_level": true,
+  "n_patients": 161,
+  "probability_mean": 0.4654545238020554,
+  "probability_std": 0.29062112644603183,
+  "ks_vs_oof": 0.18012422360248448,
+  "locked_threshold": 0.45712346732616416,
+  "oof_positive_rate": 0.4906832298136646,
+  "development_positive_rate": 0.4782608695652174,
+  "threshold_delta": 0.012422360248447173,
+  "diagnostic_in_sample_patient_auc": 0.9987642879209144,
+  "gates": {
+    "prob_std": {
+      "value": 0.29062112644603183,
+      "passed": true
+    },
+    "ks_vs_oof": {
+      "value": 0.18012422360248448,
+      "passed": false
+    },
+    "threshold_transfer": {
+      "oof_pos_rate": 0.4906832298136646,
+      "development_pos_rate": 0.4782608695652174,
+      "delta": 0.012422360248447173,
+      "passed": true
+    }
+  },
+  "gates_passed": false
+}
